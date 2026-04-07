@@ -1,0 +1,38 @@
+{% if topics %}
+<div style="margin-bottom: 0.5rem;">
+    {% for t in topics %}
+    <a href="/papers?topic_id={{ t.id }}">
+        <span class="badge badge-source">{{ t.name }}</span>
+    </a>
+    {% if t.relevance_score and t.relevance_score > 0 %}
+    <small style="color: var(--pico-muted-color);">({{ "%.2f"|format(t.relevance_score) }})</small>
+    {% endif %}
+    {% endfor %}
+</div>
+{% else %}
+<p style="color: var(--pico-muted-color); font-style: italic;">Not linked to any topic</p>
+{% endif %}
+
+{% set unlinked = [] %}
+{% for t in all_topics %}
+    {% if t.id not in linked_topic_ids %}
+        {% if unlinked.append(t) %}{% endif %}
+    {% endif %}
+{% endfor %}
+
+{% if unlinked %}
+<form hx-post="/papers/{{ paper_id }}/add-to-topic"
+      hx-target="#paper-topics-section"
+      hx-swap="innerHTML"
+      hx-indicator="#add-topic-ind"
+      style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
+    <select name="topic_id" style="margin: 0; width: auto;">
+        {% for t in unlinked %}
+        <option value="{{ t.id }}">{{ t.name }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="outline" style="margin: 0; padding: 0.3rem 0.7rem; font-size: 0.85rem; white-space: nowrap;">
+        Add to topic <span id="add-topic-ind" class="htmx-indicator"><span class="spinner"></span></span>
+    </button>
+</form>
+{% endif %}

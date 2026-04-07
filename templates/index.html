@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Poneglyph - Home{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Poneglyph</h1>
+    <p>Automated research paper scouting &amp; synthesis</p>
+</hgroup>
+
+<div class="grid">
+    <article style="display: flex; flex-direction: column;">
+        <header><h3 style="margin: 0;"><strong>Topics</strong></h3></header>
+        <p style="flex: 1;">Define research topics with keywords to scout for papers across arXiv, SSRN, and Kaggle. Synthesis and cross-paper analysis are accessed per topic.</p>
+        <a href="/topics" role="button" style="width: fit-content;">Manage Topics</a>
+    </article>
+    <article style="display: flex; flex-direction: column;">
+        <header><h3 style="margin: 0;"><strong>Papers</strong></h3></header>
+        <p style="flex: 1;">Browse discovered papers with AI-generated structured notes and recommendations.</p>
+        <a href="/papers" role="button" style="width: fit-content;">Browse Papers</a>
+    </article>
+</div>
+{% endblock %}

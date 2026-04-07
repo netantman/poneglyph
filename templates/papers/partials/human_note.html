@@ -1,0 +1,29 @@
+{% if note and note.human_note %}
+<div>
+    <p style="white-space: pre-wrap;">{{ note.human_note }}</p>
+    <button class="outline secondary" style="font-size: 0.85rem; padding: 0.3rem 0.7rem;"
+            onclick="this.parentElement.nextElementSibling.style.display='block'; this.parentElement.style.display='none';">
+        Edit Note
+    </button>
+</div>
+<div style="display: none;">
+{% else %}
+<div style="display: none;">
+    <p></p>
+    <button class="outline secondary">Edit Note</button>
+</div>
+<div>
+{% endif %}
+    <form hx-put="/papers/{{ paper_id }}/human-note"
+          hx-target="#human-note-section"
+          hx-swap="innerHTML"
+          hx-indicator="#note-ind">
+        <textarea name="human_note" rows="4"
+                  placeholder="What do you find important or unimportant about this paper? Your notes here will inform topic steering.">{{ note.human_note or '' if note else '' }}</textarea>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="submit" style="font-size: 0.85rem; padding: 0.3rem 0.7rem; width: auto;">
+                Save Note <span id="note-ind" class="htmx-indicator"><span class="spinner"></span></span>
+            </button>
+        </div>
+    </form>
+</div>

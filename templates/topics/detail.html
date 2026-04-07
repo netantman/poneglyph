@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}{{ topic.name }} - Poneglyph{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ul>
+        <li><a href="/topics">Topics</a></li>
+        <li>{{ topic.name }}</li>
+    </ul>
+</nav>
+
+<hgroup>
+    <h2>
+        {{ topic.name }}
+        {% if topic.is_active %}
+            <span class="badge badge-active">Active</span>
+        {% else %}
+            <span class="badge badge-inactive">Paused</span>
+        {% endif %}
+    </h2>
+    {% if topic.description %}
+        <p>{{ topic.description }}</p>
+    {% endif %}
+</hgroup>
+
+<div class="grid">
+    <!-- Left: topic details -->
+    <div>
+        <article>
+            <header><strong>Keywords</strong></header>
+            {% for kw in topic.keywords %}
+                <span class="keyword-tag">{{ kw }}</span>
+            {% endfor %}
+            {% if not topic.keywords %}
+                <em style="color: var(--pico-muted-color);">No keywords defined</em>
+            {% endif %}
+        </article>
+
+        {% if topic.priority_keywords %}
+        <article>
+            <header><strong>Priority Keywords</strong></header>
+            {% for kw in topic.priority_keywords %}
+                <span class="keyword-tag priority">{{ kw }}</span>
+            {% endfor %}
+        </article>
+        {% endif %}
+
+        {% if topic.problem_statements %}
+        <article>
+            <header><strong>Problem Statements</strong></header>
+            <ul>
+                {% for ps in topic.problem_statements %}
+                    <li>{{ ps }}</li>
+                {% endfor %}
+            </ul>
+        </article>
+        {% endif %}
+
+        <article>
+            <header><strong>Configuration</strong></header>
+            <p>
+                <strong>Sources:</strong>
+                {% for src in topic.sources %}
+                    <span class="badge badge-source">{{ src }}</span>
+                {% endfor %}
+            </p>
+            <p><strong>PDF Policy:</strong> {{ topic.pdf_policy }}</p>
+            <p><strong>Created:</strong> {{ topic.created_at }}</p>
+            <p><strong>Updated:</strong> {{ topic.updated_at }}</p>
+        </article>
+    </div>
+
+    <!-- Right: papers for this topic -->
+    <div>
+        <article>
+            <header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong>Papers</strong>
+                    <a href="/papers/upload?topic_id={{ topic.id }}" role="button" class="outline"
+                       style="margin: 0; padding: 0.3rem 0.7rem; font-size: 0.85rem;"
+                       hx-get="/papers/upload?topic_id={{ topic.id }}" hx-target="#paper-upload-area" hx-swap="innerHTML"
+                       hx-indicator="#paper-add-ind">
+                        + Add Paper <span id="paper-add-ind" class="htmx-indicator"><span class="spinner"></span></span>
+                    </a>
+                </div>
+            </header>
+            <div id="paper-upload-area"></div>
+            {% if papers %}
+                {% for paper in papers %}
+                <div style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);">
+                    <a href="/papers/{{ paper.id }}"><strong>{{ paper.title }}</strong></a>
+                    {% if paper.authors %}
+                    <br><small style="color: var(--pico-muted-color);">
+                        {{ paper.authors | join(', ') if paper.authors is iterable and paper.authors is not string else paper.authors }}
+                    </small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <a href="/papers?topic_id={{ topic.id }}" style="font-size: 0.85rem;">View all papers →</a>
+            {% else %}
+                <p style="color: var(--pico-muted-color); font-style: italic;">No papers yet. Add one manually or wait for scouting.</p>
+            {% endif %}
+        </article>
+    </div>
+</div>
+
+<div class="actions" style="margin-top: 1rem;">
+    <a href="/topics/{{ topic.id }}/edit" role="button" class="outline">Edit Topic</a>
+    <button class="outline contrast"
+            hx-delete="/topics/{{ topic.id }}"
+            hx-confirm="Delete topic '{{ topic.name }}'? This cannot be undone."
+            hx-on::after-request="if(event.detail.successful) window.location='/topics'">
+        Delete
+    </button>
+</div>
+{% endblock %}

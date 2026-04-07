@@ -1,0 +1,44 @@
+{% if not editing and not topic %}
+{# Inline create form (loaded via htmx into #topic-form-area) #}
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>New Topic</strong>
+            <button class="outline secondary" style="margin:0; padding: 0.2rem 0.6rem;"
+                    onclick="document.getElementById('topic-form-area').innerHTML=''">
+                Cancel
+            </button>
+        </div>
+    </header>
+    <form hx-post="/topics" hx-target="#topic-list" hx-swap="afterbegin"
+          hx-on::after-request="if(event.detail.successful) document.getElementById('topic-form-area').innerHTML=''">
+        {% include "topics/partials/form_fields.html" %}
+        <button type="submit">Create Topic <span class="htmx-indicator"><span class="spinner"></span></span></button>
+    </form>
+</article>
+{% else %}
+{# Inline edit form #}
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>Edit: {{ topic.name }}</strong>
+            <button class="outline secondary" style="margin:0; padding: 0.2rem 0.6rem;"
+                    onclick="document.getElementById('topic-form-area').innerHTML=''">
+                Cancel
+            </button>
+        </div>
+    </header>
+    <form hx-put="/topics/{{ topic.id }}" hx-target="#topic-{{ topic.id }}" hx-swap="outerHTML"
+          hx-on::after-request="if(event.detail.successful) document.getElementById('topic-form-area').innerHTML=''">
+        {% include "topics/partials/form_fields.html" %}
+        <div style="display: flex; gap: 0.5rem;">
+            <label>
+                <input type="checkbox" name="is_active" value="true"
+                       {% if topic.is_active %}checked{% endif %}>
+                Active
+            </label>
+        </div>
+        <button type="submit">Update Topic <span class="htmx-indicator"><span class="spinner"></span></span></button>
+    </form>
+</article>
+{% endif %}

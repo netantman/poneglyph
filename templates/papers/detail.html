@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}{{ paper.title }} - Poneglyph{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ul>
+        <li><a href="/papers">Papers</a></li>
+        <li>{{ paper.title[:60] }}{% if paper.title|length > 60 %}...{% endif %}</li>
+    </ul>
+</nav>
+
+<!-- Paper Info -->
+<article>
+    <header><strong>Paper Info</strong></header>
+    <div id="paper-info-section">
+        {% with editing=False %}
+            {% include "papers/partials/paper_info.html" %}
+        {% endwith %}
+    </div>
+</article>
+
+<!-- Key Insights -->
+<article>
+    <header><strong>Key Insights</strong></header>
+    {% if note and note.key_insights and note.key_insights != {} %}
+        {% if note.key_insights is mapping %}
+            {% for key, value in note.key_insights.items() %}
+                <p><strong>{{ key }}:</strong> {{ value }}</p>
+            {% endfor %}
+        {% else %}
+            <p>{{ note.key_insights }}</p>
+        {% endif %}
+    {% else %}
+        <p style="color: var(--pico-muted-color); font-style: italic;">Pending synthesis (Phase 4)</p>
+    {% endif %}
+</article>
+
+<!-- Trading Applications -->
+<article>
+    <header><strong>Applications for Trading &amp; Investments</strong></header>
+    {% if note and note.trading_applications %}
+        <p>{{ note.trading_applications }}</p>
+    {% else %}
+        <p style="color: var(--pico-muted-color); font-style: italic;">Pending synthesis (Phase 4)</p>
+    {% endif %}
+</article>
+
+<!-- Human Note -->
+<article>
+    <header><strong>Human Note</strong></header>
+    <div id="human-note-section">
+        {% include "papers/partials/human_note.html" %}
+    </div>
+</article>
+
+<!-- Associated Topics -->
+<article>
+    <header><strong>Topics</strong></header>
+    <div id="paper-topics-section">
+        {% include "papers/partials/paper_topics.html" %}
+    </div>
+</article>
+
+<div class="actions" style="margin-top: 1rem;">
+    <a href="/papers" role="button" class="outline secondary">Back to Papers</a>
+    {% if paper.url %}
+    <a href="{{ paper.url }}" role="button" class="outline" target="_blank" rel="noopener">Open Original</a>
+    {% endif %}
+    {% if paper.pdf_local_path %}
+    <a href="{{ paper.pdf_local_path }}" role="button" class="outline" target="_blank">View PDF</a>
+    {% endif %}
+    <button class="outline contrast"
+            hx-delete="/papers/{{ paper.id }}"
+            hx-confirm="Delete paper '{{ paper.title }}'? This cannot be undone."
+            hx-on::after-request="if(event.detail.successful) window.location='/papers'">
+        Delete
+    </button>
+</div>
+{% endblock %}

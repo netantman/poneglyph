@@ -1,0 +1,62 @@
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>Add Paper</strong>
+            <button class="outline secondary" style="margin:0; padding: 0.2rem 0.6rem;"
+                    onclick="document.getElementById('upload-form-area').innerHTML=''">
+                Cancel
+            </button>
+        </div>
+    </header>
+    <form hx-post="/papers/upload"
+          hx-encoding="multipart/form-data"
+          hx-indicator="#upload-submit-ind">
+
+        <label>Title
+            <input type="text" name="title" placeholder="Paper title (required unless uploading PDF with metadata)">
+        </label>
+
+        <label>Authors <small>(comma-separated)</small>
+            <input type="text" name="authors" placeholder="e.g. John Smith, Jane Doe">
+        </label>
+
+        <label>URL
+            <input type="url" name="url" placeholder="https://arxiv.org/abs/... or any link">
+        </label>
+
+        <label>Abstract / Executive Summary
+            <textarea name="abstract" rows="3" placeholder="Paste the abstract or executive summary"></textarea>
+        </label>
+
+        <div class="grid">
+            <label>Published Venue
+                <input type="text" name="published_venue" placeholder="e.g. Journal of Finance">
+            </label>
+            <label>Published Date
+                <input type="text" name="published_date" placeholder="e.g. 2024-03-15">
+            </label>
+        </div>
+
+        <fieldset>
+            <legend>Topics <small>(select one or more)</small></legend>
+            {% for t in all_topics %}
+            <label style="display: inline-flex; align-items: center; margin-right: 1rem;">
+                <input type="checkbox" name="topic_ids" value="{{ t.id }}"
+                       {% if t.id in preselected_ids %}checked{% endif %}>
+                {{ t.name }}
+            </label>
+            {% endfor %}
+            {% if not all_topics %}
+            <small style="color: var(--pico-muted-color);">No topics yet — <a href="/topics">create one first</a></small>
+            {% endif %}
+        </fieldset>
+
+        <label>Upload PDF <small>(optional — extracts title &amp; abstract if not provided above)</small>
+            <input type="file" name="pdf_file" accept=".pdf">
+        </label>
+
+        <button type="submit">
+            Upload Paper <span id="upload-submit-ind" class="htmx-indicator"><span class="spinner"></span></span>
+        </button>
+    </form>
+</article>

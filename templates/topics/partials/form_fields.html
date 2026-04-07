@@ -1,0 +1,63 @@
+<label>
+    Name
+    <input type="text" name="name" required
+           value="{{ topic.name if topic else '' }}"
+           placeholder="e.g. Momentum Factor Models">
+</label>
+
+<label>
+    Description
+    <textarea name="description" rows="2"
+              placeholder="Brief description of this research area">{{ topic.description if topic else '' }}</textarea>
+</label>
+
+<label>
+    Keywords <small>(comma-separated)</small>
+    <input type="text" name="keywords"
+           value="{{ topic.keywords | join(', ') if topic and topic.keywords else '' }}"
+           placeholder="e.g. momentum, factor model, cross-section, alpha">
+</label>
+
+<label>
+    Priority Keywords <small>(comma-separated, higher search weight)</small>
+    <input type="text" name="priority_keywords"
+           value="{{ topic.priority_keywords | join(', ') if topic and topic.priority_keywords else '' }}"
+           placeholder="e.g. backtesting, out-of-sample">
+</label>
+
+<label>
+    Problem Statements <small>(one per line &mdash; specific questions you want answered)</small>
+    <textarea name="problem_statements" rows="3"
+              placeholder="e.g. How to backtest momentum strategies without lookahead bias?">{{ topic.problem_statements | join('\n') if topic and topic.problem_statements else '' }}</textarea>
+</label>
+
+<fieldset>
+    <legend>Sources</legend>
+    <label>
+        <input type="checkbox" name="sources" value="arxiv"
+               {% if not topic or 'arxiv' in (topic.sources or []) %}checked{% endif %}>
+        arXiv
+    </label>
+    <label>
+        <input type="checkbox" name="sources" value="ssrn"
+               {% if topic and 'ssrn' in (topic.sources or []) %}checked{% endif %}>
+        SSRN
+    </label>
+    <label>
+        <input type="checkbox" name="sources" value="kaggle"
+               {% if topic and 'kaggle' in (topic.sources or []) %}checked{% endif %}>
+        Kaggle
+    </label>
+</fieldset>
+
+<label>
+    PDF Policy
+    <select name="pdf_policy">
+        <option value="link_only" {% if not topic or topic.pdf_policy == 'link_only' %}selected{% endif %}>
+            Link only (save space)
+        </option>
+        <option value="download" {% if topic and topic.pdf_policy == 'download' %}selected{% endif %}>
+            Download PDFs locally
+        </option>
+    </select>
+</label>

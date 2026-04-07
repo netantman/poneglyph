@@ -1,0 +1,220 @@
+# Poneglyph - Research Paper Scouting Webapp
+
+## Context
+Build a webapp that scouts research papers via **citation graph traversal** (Semantic Scholar API). Users establish topics by uploading seed papers and defining problem statements. The system discovers new papers by following citations and references from seed papers, then filters by relevance. Papers are stored locally in SQLite, summarized with tiered AI (Haiku for bulk, Opus for deep dives after user approval), and cross-paper synthesis provides research direction guidance. Runs weekly via Windows Task Scheduler.
+
+## Tech Stack
+- **Backend**: Python FastAPI + Jinja2 templates + htmx (no build step, no node_modules)
+- **Database**: SQLite (single file, free) with FTS5 (keyword search) + sqlite-vec (vector search)
+- **Citation API**: Semantic Scholar Academic Graph API (free, 100 req/sec unauthenticated)
+- **Metadata API**: arXiv Atom API (for arXiv-specific metadata enrichment)
+- **Embeddings**: sentence-transformers `all-MiniLM-L6-v2` (22MB, runs locally, free)
+- **LLM**: Claude Haiku for bulk summaries (~$0.001/paper), Claude Opus for deep synthesis (user-approved)
+- **CSS**: Pico CSS via CDN (clean defaults, zero config)
+- **Scheduler**: Windows Task Scheduler calling a Python script
+
+## Project Structure
+```
+poneglyph/
+├── pyproject.toml
+├── .env.example
+├── poneglyph/
+│   ├── app.py              # FastAPI app factory
+│   ├── config.py            # Settings from .env
+│   ├── db.py                # SQLite + FTS5 + sqlite-vec setup
+│   ├── models.py            # Pydantic schemas
+│   ├── pipeline.py          # Orchestration: discover -> store -> synthesize
+│   ├── scheduler_entry.py   # CLI entry for Windows Task Scheduler
+│   ├── routes/
+│   │   ├── topics.py        # Topic CRUD + synthesis triggers (per-topic)
+│   │   ├── papers.py        # Paper listing, detail, upload, human notes
+│   │   ├── scouting.py      # Manual scouting & citation enrichment triggers
+│   │   └── settings.py      # App settings
+│   └── services/
+│       ├── semantic_scholar.py  # Semantic Scholar API: citations, references, metadata
+│       ├── arxiv_fetch.py       # arXiv API: metadata enrichment for arXiv papers
+│       ├── citation_scout.py    # Citation graph traversal logic (1-hop, both directions)
+│       ├── pdf_manager.py       # PDF download/storage
+│       ├── embeddings.py        # Embedding generation + vector search + relevance scoring
+│       ├── llm_bulk.py          # Haiku: structured paper notes for ALL papers
+│       ├── llm_deep.py          # Opus deep synthesis (user-approved)
+│       ├── llm_cross.py         # Cross-paper synthesis (monthly, automatic)
+│       └── llm_qa.py            # Q&A over paper collection
+├── templates/               # Jinja2 + htmx
+├── static/                  # Pico CSS, htmx.min.js
+├── data/                    # Runtime: poneglyph.db, pdfs/
+└── scripts/
+    └── setup_scheduler.py   # Register Windows Task Scheduler
+```
+
+## Database Schema
+
+### Core tables
+- **topics**: name, description, keywords (JSON), problem_statements (JSON), pdf_policy ('link_only'|'download'), is_active
+  - `keywords`: used for keyword-based search filtering and FTS5 queries
+  - `problem_statements`: specific problems the user wants solutions to — drives relevance scoring and LLM prompts
+- **papers**: source, source_id, semantic_scholar_id, title, authors, published_venue, published_date, abstract, url, pdf_url, pdf_local_path
+  - `semantic_scholar_id`: Semantic Scholar paper ID (e.g. "649def34f8be52c8b66281af98ae884c09aef38b"). Used for citation graph traversal.
+- **topic_papers**: many-to-many linking + relevance_score (semantic similarity to topic's problem statements) + recommendation ('read'|'skip'|'deep_dive') — recommendation is per-topic, not per-paper
+- **paper_citations**: from_paper_id, to_paper_id, direction ('cites'|'cited_by')
+  - Tracks the citation graph. `from_paper_id` cites `to_paper_id` when direction='cites'. Used to trace how papers were discovered.
+
+### Note tables
+- **paper_notes**: structured note per paper (one row per paper):
+  - `key_insights`: main conclusions, new models/methodology, empirical findings, contribution to literature (JSON)
+  - `trading_applications`: relevance to trading and investments (text)
+  - `human_note`: user-entered free text (nullable) — annotation and steering input
+  - `model_used`, `tier` ('bulk'|'deep')
+- **cross_syntheses**: topic_id, paper_ids (JSON), synthesis, research_directions (JSON), model_used, created_at
+
+### Operational tables
+- **scout_runs**: logging table for each scouting run
+- **topic_steering_log**: tracks changes to topic emphasis/direction over time
+
+### Search tables
+- **papers_fts**: FTS5 virtual table (keyword search across title, abstract, paper_notes fields)
+- **paper_embeddings**: sqlite-vec virtual table (384-dim vectors)
+- **topic_embeddings**: sqlite-vec virtual table (384-dim vectors) — one embedding per problem statement per topic
+
+## Core Workflow: Citation-Graph Scouting
+
+### 1. Topic Establishment
+1. User creates a topic with a name, description, and problem statements
+2. User uploads initial papers (via arXiv URL, other URL, or manual entry)
+3. System resolves each paper's Semantic Scholar ID
+4. System fetches 1-hop citations (papers that cite it) and references (papers it cites) from Semantic Scholar
+5. New papers are stored with links to their source, and Haiku synthesis runs on each
+
+### 2. Ongoing Scouting (scheduled or manual)
+1. For each active topic, get all papers in the topic
+2. Query Semantic Scholar for new citations of existing papers (papers not already in DB)
+3. Filter by keyword relevance: paper title/abstract must match at least one topic keyword
+4. Score relevance against problem statements via embeddings
+5. Store new papers, run Haiku synthesis
+
+### 3. Per-Paper Citation Enrichment (user-triggered)
+- On any paper's detail page, a **"Discover Citations"** button triggers 1-hop citation traversal for that specific paper
+- Finds papers citing it + papers it cites, filters out duplicates already in DB
+- User controls when to expand the graph — not automatic beyond the initial establishment
+
+### Relevance Filtering
+Human notes on existing papers steer what's considered relevant:
+- When a user writes "the regime detection approach here is exactly what I need", future scouting prioritizes papers in that citation neighborhood
+- When a user writes "too simplistic, not useful", the system de-prioritizes that branch
+- Implementation: human notes are fed into the Haiku prompt when synthesizing newly discovered papers, and into the relevance scoring logic
+
+## Semantic Scholar API
+
+### Key endpoints
+- `GET /paper/{paper_id}` — metadata (title, authors, abstract, year, venue, externalIds, citationCount, referenceCount)
+- `GET /paper/{paper_id}/citations` — papers that cite this paper (paginated, up to 1000)
+- `GET /paper/{paper_id}/references` — papers this paper cites (paginated, up to 1000)
+- `GET /paper/search?query={query}` — keyword search (fallback for papers without Semantic Scholar IDs)
+
+### Paper ID resolution
+Semantic Scholar accepts multiple ID formats:
+- Semantic Scholar ID: `649def34f8be52c8b66281af98ae884c09aef38b`
+- arXiv ID: `arXiv:2403.09267`
+- DOI: `DOI:10.1234/example`
+- URL: `URL:https://arxiv.org/abs/2403.09267`
+
+This means arXiv papers uploaded by the user can be resolved directly without a separate lookup.
+
+### Rate limits
+- Unauthenticated: 100 requests per 5 minutes
+- With API key (free): 1 request/second sustained
+- For scouting runs, implement rate limiting and backoff
+
+## Workflows & Interface
+
+See [workflow_and_interface.md](workflow_and_interface.md) for details on:
+- Topic Establishment Workflow
+- Structured Paper Note Format (including Human Note)
+- Synthesis Workflow (3 tiers: bulk → deep → cross-paper)
+- User Q&A Over Papers
+- Topic Steering (direct + indirect via Human Notes)
+
+### Implementation details retained here
+- Paper notes stored in `paper_notes` table (see Database Schema above)
+- `human_note` column: TEXT, nullable, default NULL
+- Human Note editable via htmx `PUT /papers/{id}/human-note`
+- Q&A uses vector similarity search over `paper_embeddings` + FTS5
+- Steering changes tracked in `topic_steering_log` table
+- Cross-paper synthesis scheduled monthly via separate Task Scheduler task
+- Synthesis is per-topic: triggered and displayed on the topic detail page, not a standalone section
+- Dashboard has two cards: Topics and Papers. No standalone Synthesis card.
+
+## Implementation Phases
+
+See individual phase files for details:
+
+1. [Phase 1: Foundation](phase1_foundation.md) — project skeleton, DB schema, topic CRUD
+1b. [Phase 1b: Frontend, Paper Pages & Launcher](phase1b_frontend.md) — UI polish, paper list/detail pages, manual paper upload, desktop shortcut
+2. [Phase 2: Scouting & Synthesis](phase2_scouting_synthesis.md) — Semantic Scholar citation graph, Haiku auto-summarization, structured notes
+3. [Phase 3: Embeddings & Search](phase3_embeddings_search.md) — semantic ranking, relevance filtering, FTS5 + vector search
+4. [Phase 4: Deep Synthesis, Q&A & Cross-Paper](phase4_deep_synthesis_qa.md) — Opus deep dives, Q&A, monthly cross-paper synthesis
+5. [Phase 5: Steering & Enrichment](phase5_steering_enrichment.md) — human note feedback loop, per-paper citation enrichment, topic steering UI
+6. [Phase 6: Scheduler & Launcher](phase6_scheduler_launcher.md) — Windows Task Scheduler, desktop shortcut launcher
+
+## Problem-Centric Relevance (Core Design Principle)
+
+Topics are not keyword buckets — they represent **practical problems the user is trying to solve** (e.g. "robust backtesting methodology for momentum strategies", "regime detection for portfolio allocation"). This fundamentally shapes how papers are ranked, recommended, and synthesized.
+
+### How it works with citation-graph scouting
+
+**1. Citation graph provides retrieval; keywords + embeddings provide filtering**
+- **Retrieval**: The citation graph (Semantic Scholar) provides candidate papers — these are structurally related to the user's existing papers.
+- **Keyword filter**: Candidate papers are filtered by topic keywords (title/abstract must contain at least one keyword). This keeps results focused even as the citation graph fans out.
+- **Semantic ranking**: Filtered papers are scored by cosine similarity between paper embeddings and topic problem statement embeddings. This drives sort order and recommendation.
+
+**2. Topic embeddings**
+- Each topic's problem statements are embedded (all-MiniLM-L6-v2) and stored in `topic_embeddings`.
+- When problem statements are updated (steering), topic embeddings are recomputed and all `topic_papers.relevance_score` values refreshed.
+- Relevance score = max cosine similarity across the topic's problem statement embeddings.
+
+**3. LLM bulk synthesis is problem-aware**
+- Haiku prompt includes topic's problem statements + human notes from related papers.
+- Prompt asks: "How does this paper contribute to solving these problems?"
+- `recommendation` field driven by problem-relevance, not generic quality.
+
+**4. Cross-paper synthesis is problem-framed**
+- Monthly synthesis framed around problem statements: "What progress has been made? What gaps remain?"
+- Human notes from paper annotations are fed into the prompt.
+
+## Decoupled Architecture: Scouting vs Webapp
+
+The paper scouting/synthesis pipeline and the webapp are **independent processes**. The webapp does NOT need to be running for scouting to work, and vice versa.
+
+### Why
+- Scouting runs on a schedule (Windows Task Scheduler) — it should work headlessly.
+- The webapp is for browsing results, steering topics, and triggering manual actions.
+- Both read/write the same SQLite database.
+
+### How it works
+- **`scheduler_entry.py`**: Standalone CLI script. Called by Task Scheduler. Imports scouting/synthesis services directly, writes to the DB, and exits.
+- **`app.py`**: FastAPI webapp. Reads from the same DB. Can also trigger manual scouting/enrichment.
+- **Shared layer**: `services/` and `db.py` are imported by both. No coupling to HTTP request context.
+
+### Desktop Launcher
+- **`scripts/launch_webapp.pyw`**: Starts uvicorn subprocess (no console), opens browser, stays alive to keep server running.
+- **Desktop shortcut**: `.lnk` on Desktop pointing to `launch_webapp.pyw`.
+
+## Key Design Decisions
+- **Citation-graph scouting over keyword-only search**: Papers are discovered via citation relationships from existing papers (Semantic Scholar API), not just keyword matching. Keywords filter the graph; they don't drive retrieval.
+- **Semantic Scholar as primary API**: Covers arXiv, SSRN, PubMed, and more in a unified citation graph. Free tier sufficient for our volume.
+- **User-controlled graph expansion**: 1-hop citations at establishment, then per-paper "Discover Citations" button. No automatic recursive crawling — user decides when to expand.
+- **sqlite-vec over FAISS/ChromaDB**: Everything in one SQLite file, no separate process
+- **Local embeddings over API**: all-MiniLM-L6-v2 is 22MB, runs in ms on CPU, free
+- **htmx over React**: No build step, interactive enough for this use case
+- **Decoupled scouting and webapp**: Scouting runs headlessly via Task Scheduler. Both share the same SQLite DB.
+- **pypdf** for extracting full text from downloaded PDFs
+
+## Verification
+1. Run `pip install -e .` and start with `uvicorn poneglyph.app:app`
+2. Create a topic with problem statements, upload initial papers
+3. Verify citation discovery populates related papers
+4. Verify Haiku synthesis generates structured notes
+5. Search papers via keyword and semantic search
+6. Approve a paper for deep synthesis, verify Opus output
+7. Run cross-paper synthesis, verify research directions
+8. Run `python poneglyph/scheduler_entry.py` manually to test scheduled flow
