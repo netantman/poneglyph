@@ -24,6 +24,8 @@
     {% endif %}
 </hgroup>
 
+<div id="topic-edit-area"></div>
+
 <div class="grid">
     <!-- Left: topic details -->
     <div>
@@ -65,9 +67,9 @@
                     <span class="badge badge-source">{{ src }}</span>
                 {% endfor %}
             </p>
-            <p><strong>PDF Policy:</strong> {{ topic.pdf_policy }}</p>
-            <p><strong>Created:</strong> {{ topic.created_at }}</p>
-            <p><strong>Updated:</strong> {{ topic.updated_at }}</p>
+            <p><strong>PDF Policy:</strong> {{ 'Source link only' if topic.pdf_policy == 'link_only' else 'Download PDFs locally' }}</p>
+            <p><strong>Created:</strong> {{ topic.created_at | nyc }} ET</p>
+            <p><strong>Updated:</strong> {{ topic.updated_at | nyc }} ET</p>
         </article>
     </div>
 
@@ -79,25 +81,26 @@
                     <strong>Papers</strong>
                     <a href="/papers/upload?topic_id={{ topic.id }}" role="button" class="outline"
                        style="margin: 0; padding: 0.3rem 0.7rem; font-size: 0.85rem;"
-                       hx-get="/papers/upload?topic_id={{ topic.id }}" hx-target="#paper-upload-area" hx-swap="innerHTML"
+                       hx-get="/papers/upload?topic_id={{ topic.id }}" hx-target="#upload-form-area" hx-swap="innerHTML"
                        hx-indicator="#paper-add-ind">
                         + Add Paper <span id="paper-add-ind" class="htmx-indicator"><span class="spinner"></span></span>
                     </a>
                 </div>
             </header>
-            <div id="paper-upload-area"></div>
+            <div id="upload-form-area"></div>
             {% if papers %}
-                {% for paper in papers %}
-                <div style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);">
-                    <a href="/papers/{{ paper.id }}"><strong>{{ paper.title }}</strong></a>
-                    {% if paper.authors %}
-                    <br><small style="color: var(--pico-muted-color);">
-                        {{ paper.authors | join(', ') if paper.authors is iterable and paper.authors is not string else paper.authors }}
-                    </small>
-                    {% endif %}
+                <input type="search" placeholder="Search papers…"
+                       style="margin-bottom: 0.75rem;"
+                       hx-get="/topics/{{ topic.id }}/papers-list"
+                       hx-trigger="input changed delay:300ms"
+                       hx-target="#topic-papers-list"
+                       hx-swap="innerHTML"
+                       name="q">
+                <div id="topic-papers-list">
+                    {% with show_all_link=(papers|length >= 20) %}
+                        {% include "topics/partials/papers_list.html" %}
+                    {% endwith %}
                 </div>
-                {% endfor %}
-                <a href="/papers?topic_id={{ topic.id }}" style="font-size: 0.85rem;">View all papers →</a>
             {% else %}
                 <p style="color: var(--pico-muted-color); font-style: italic;">No papers yet. Add one manually or wait for scouting.</p>
             {% endif %}
@@ -106,7 +109,20 @@
 </div>
 
 <div class="actions" style="margin-top: 1rem;">
-    <a href="/topics/{{ topic.id }}/edit" role="button" class="outline">Edit Topic</a>
+    <button class="outline"
+            hx-get="/topics/{{ topic.id }}/edit?from_detail=1"
+            hx-target="#topic-edit-area"
+            hx-swap="innerHTML"
+            onclick="window.scrollTo({top:0,behavior:'smooth'})">Edit Topic</button>
+    <button class="outline"
+            hx-post="/scout/topic/{{ topic.id }}"
+            hx-target="#scout-status-area"
+            hx-swap="innerHTML"
+            hx-confirm="Scout citations for {{ seed_count }} seed paper(s) in this topic? This calls Semantic Scholar and may take a few minutes."
+            hx-indicator="#scout-ind">
+        Scout Now
+        <span id="scout-ind" class="htmx-indicator"><span class="spinner"></span></span>
+    </button>
     <button class="outline contrast"
             hx-delete="/topics/{{ topic.id }}"
             hx-confirm="Delete topic '{{ topic.name }}'? This cannot be undone."
@@ -114,4 +130,5 @@
         Delete
     </button>
 </div>
+<div id="scout-status-area" style="margin-top: 0.5rem;"></div>
 {% endblock %}

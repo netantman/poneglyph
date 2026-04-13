@@ -8,32 +8,70 @@
             </button>
         </div>
     </header>
+
+    {% if llm_message %}
+    <div style="background: var(--pico-card-sectioning-background-color); border: 1px solid var(--pico-primary-border); border-radius: 0.4rem; padding: 0.65rem 0.85rem; margin-bottom: 1rem; font-size: 0.9rem;">
+        ℹ️ {{ llm_message }}
+    </div>
+    {% endif %}
+
     <form hx-post="/papers/upload"
           hx-encoding="multipart/form-data"
+          hx-target="#upload-form-area"
+          hx-swap="innerHTML"
           hx-indicator="#upload-submit-ind">
 
+        <input type="hidden" name="pdf_tmp_id" value="{{ pdf_tmp_id or '' }}">
+
         <label>Title
-            <input type="text" name="title" placeholder="Paper title (required unless uploading PDF with metadata)">
+            <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                <div style="flex: 1;">
+                    <input type="text" name="title" id="title-input"
+                           value="{{ prefill.title if prefill and prefill.title else '' }}"
+                           placeholder="Paper title (auto-extracted if uploading PDF or recognised URL)">
+                </div>
+                {% if pdf_tmp_id or llm_message %}
+                <button type="button" class="outline secondary" style="width: auto; margin: 0; white-space: nowrap; font-size: 0.85rem; padding: 0.45rem 0.7rem;"
+                        hx-get="/papers/search-by-title"
+                        hx-include="#title-input"
+                        hx-target="#title-search-result"
+                        hx-swap="innerHTML"
+                        hx-indicator="#search-ind">
+                    Search DOI <span id="search-ind" class="htmx-indicator"><span class="spinner" style="width:0.8em;height:0.8em;"></span></span>
+                </button>
+                {% endif %}
+            </div>
         </label>
+
+        <div id="title-search-result" style="margin-top: -0.5rem; margin-bottom: 0.75rem;"></div>
 
         <label>Authors <small>(comma-separated)</small>
-            <input type="text" name="authors" placeholder="e.g. John Smith, Jane Doe">
+            <input type="text" name="authors" id="authors-input"
+                   value="{{ prefill.authors if prefill and prefill.authors else '' }}"
+                   placeholder="e.g. John Smith, Jane Doe">
         </label>
 
-        <label>URL
-            <input type="url" name="url" placeholder="https://arxiv.org/abs/... or any link">
+        <label>URL <small>(arXiv or DOI auto-extracts metadata)</small>
+            <input type="url" name="url" id="url-input"
+                   value="{{ prefill.url if prefill and prefill.url else '' }}"
+                   placeholder="https://arxiv.org/abs/... or https://doi.org/...">
         </label>
 
         <label>Abstract / Executive Summary
-            <textarea name="abstract" rows="3" placeholder="Paste the abstract or executive summary"></textarea>
+            <textarea name="abstract" id="abstract-input" rows="3"
+                      placeholder="Paste the abstract or executive summary">{{ prefill.abstract if prefill and prefill.abstract else '' }}</textarea>
         </label>
 
         <div class="grid">
             <label>Published Venue
-                <input type="text" name="published_venue" placeholder="e.g. Journal of Finance">
+                <input type="text" name="published_venue" id="venue-input"
+                       value="{{ prefill.published_venue if prefill and prefill.published_venue else '' }}"
+                       placeholder="e.g. Journal of Finance">
             </label>
             <label>Published Date
-                <input type="text" name="published_date" placeholder="e.g. 2024-03-15">
+                <input type="text" name="published_date" id="date-input"
+                       value="{{ prefill.published_date if prefill and prefill.published_date else '' }}"
+                       placeholder="e.g. 2024-03-15">
             </label>
         </div>
 
@@ -51,12 +89,117 @@
             {% endif %}
         </fieldset>
 
-        <label>Upload PDF <small>(optional — extracts title &amp; abstract if not provided above)</small>
-            <input type="file" name="pdf_file" accept=".pdf">
-        </label>
+        <!-- PDF section -->
+        {% if pdf_tmp_id %}
+        <!-- PDF already uploaded in a previous attempt — just pick destination folder -->
+        <fieldset>
+            <legend>PDF</legend>
+            <p style="margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--pico-muted-color);">
+                PDF already uploaded. Select a destination folder to save it.
+            </p>
+            <input type="hidden" name="pdf_mode" value="upload">
+            <label>Save to folder
+                <select name="pdf_subfolder">
+                    <option value="">— Select folder —</option>
+                    {% for sf in subfolders %}
+                    <option value="{{ sf }}" {% if sf == pdf_subfolder_selected %}selected{% endif %}>{{ sf }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </fieldset>
+        {% else %}
+        <fieldset>
+            <legend>PDF</legend>
+            <div style="display: flex; gap: 1.5rem; margin-bottom: 0.75rem;">
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                    <input type="radio" name="pdf_mode" value="upload" checked
+                           onchange="setPdfMode('upload')" style="margin: 0;">
+                    Upload new file
+                </label>
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                    <input type="radio" name="pdf_mode" value="link"
+                           onchange="setPdfMode('link')" style="margin: 0;">
+                    Link existing file
+                </label>
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                    <input type="radio" name="pdf_mode" value="none"
+                           onchange="setPdfMode('none')" style="margin: 0;">
+                    No PDF
+                </label>
+            </div>
+
+            <!-- Upload new -->
+            <div id="pdf-upload-section">
+                <div class="grid">
+                    <label>File
+                        <input type="file" name="pdf_file" accept=".pdf">
+                    </label>
+                    <label>Save to folder
+                        <select name="pdf_subfolder">
+                            <option value="">— Select folder —</option>
+                            {% for sf in subfolders %}
+                            <option value="{{ sf }}">{{ sf }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Link existing -->
+            <div id="pdf-link-section" style="display: none;">
+                <div class="grid">
+                    <label>Folder
+                        <select name="pdf_existing_subfolder"
+                                hx-get="/papers/pdf/files"
+                                hx-target="#pdf-existing-files-list"
+                                hx-swap="innerHTML"
+                                hx-trigger="change"
+                                hx-include="this"
+                                onchange="document.getElementById('pdf-existing-file-input').value=''">
+                            <option value="">— Select folder —</option>
+                            {% for sf in subfolders %}
+                            <option value="{{ sf }}">{{ sf }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>File
+                        <input type="text" name="pdf_existing_filename" id="pdf-existing-file-input"
+                               list="pdf-existing-files-list"
+                               placeholder="Select a folder, then type to search"
+                               autocomplete="off" style="margin: 0;">
+                        <datalist id="pdf-existing-files-list"></datalist>
+                    </label>
+                </div>
+            </div>
+        </fieldset>
+        {% endif %}
 
         <button type="submit">
             Upload Paper <span id="upload-submit-ind" class="htmx-indicator"><span class="spinner"></span></span>
         </button>
     </form>
 </article>
+
+<script>
+function setPdfMode(mode) {
+    document.getElementById('pdf-upload-section').style.display = mode === 'upload' ? '' : 'none';
+    document.getElementById('pdf-link-section').style.display = mode === 'link' ? '' : 'none';
+}
+
+function fillSearchedMetadata(card) {
+    var t = card.dataset.metaTitle || '';
+    var a = card.dataset.metaAuthors || '';
+    var ab = card.dataset.metaAbstract || '';
+    var d = card.dataset.metaPublishedDate || '';
+    var v = card.dataset.metaPublishedVenue || '';
+    var u = card.dataset.metaUrl || '';
+    if (t) document.getElementById('title-input').value = t;
+    if (a) document.getElementById('authors-input').value = a;
+    if (ab) document.getElementById('abstract-input').value = ab;
+    if (d) document.getElementById('date-input').value = d;
+    if (v) document.getElementById('venue-input').value = v;
+    if (u) document.getElementById('url-input').value = u;
+    document.getElementById('title-search-result').innerHTML =
+        '<small style="color:var(--pico-ins-color);">&#10003; Metadata applied — review and submit.</small>';
+}
+</script>

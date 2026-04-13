@@ -1,0 +1,32 @@
+{% for paper in papers %}
+<div style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color); display: flex; align-items: flex-start; gap: 0.4rem;">
+    <span hx-post="/papers/{{ paper.id }}/read-next" hx-swap="outerHTML"
+          style="cursor:pointer; font-size:1.0rem; flex-shrink:0; margin-top:0.1rem;"
+          title="{{ 'Remove from Read Next' if paper.read_next else 'Mark as Read Next' }}">{{ '🔖' if paper.read_next else '📄' }}</span>
+    <span hx-post="/topics/{{ topic.id }}/papers/{{ paper.id }}/toggle-seed"
+          hx-swap="outerHTML"
+          style="cursor:pointer; font-size:1.0rem; flex-shrink:0; margin-top:0.1rem;{% if not paper.is_scout_seed %} opacity:0.25;{% endif %}"
+          title="{{ 'Remove from scout seeds' if paper.is_scout_seed else 'Add to scout seeds' }}">🌱</span>
+    <div>
+        <a href="/papers/{{ paper.id }}"><strong>{{ paper.title }}</strong></a>
+        {% if paper.unprocessed %}
+        <span title="Unprocessed" style="color: #f59e0b; font-size: 0.75rem; margin-left: 0.3rem;">○</span>
+        {% endif %}
+        {% if paper.authors %}
+        <br><small style="color: var(--pico-muted-color);">
+            {{ paper.authors | join(', ') if paper.authors is iterable and paper.authors is not string else paper.authors }}
+        </small>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% if show_all_link %}
+<a style="font-size: 0.85rem; cursor: pointer;"
+   hx-get="/topics/{{ topic.id }}/papers-list"
+   hx-target="#topic-papers-list"
+   hx-swap="innerHTML"
+   hx-indicator="#papers-all-ind">
+    Show all papers →
+    <span id="papers-all-ind" class="htmx-indicator"><span class="spinner"></span></span>
+</a>
+{% endif %}

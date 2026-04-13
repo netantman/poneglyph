@@ -59,13 +59,9 @@ def _kill_stale_process_on_port() -> None:
 
 
 def main() -> None:
-    # If server is already running and healthy, just open the browser
+    # Always kill existing server so we restart with latest code
     if _port_is_listening():
-        webbrowser.open(URL)
-        return
-
-    # Kill any stale process holding the port
-    _kill_stale_process_on_port()
+        _kill_stale_process_on_port()
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)

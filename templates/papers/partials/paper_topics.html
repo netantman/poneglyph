@@ -1,12 +1,18 @@
 {% if topics %}
 <div style="margin-bottom: 0.5rem;">
     {% for t in topics %}
-    <a href="/papers?topic_id={{ t.id }}">
-        <span class="badge badge-source">{{ t.name }}</span>
-    </a>
-    {% if t.relevance_score and t.relevance_score > 0 %}
-    <small style="color: var(--pico-muted-color);">({{ "%.2f"|format(t.relevance_score) }})</small>
-    {% endif %}
+    <div style="display: inline-flex; align-items: center; gap: 0.3rem; margin-right: 0.5rem; margin-bottom: 0.3rem;">
+        <a href="/papers?topic_id={{ t.id }}">
+            <span class="badge badge-source">{{ t.name }}</span>
+        </a>
+        {% if t.relevance_score and t.relevance_score > 0 %}
+        <small style="color: var(--pico-muted-color);">({{ "%.2f"|format(t.relevance_score) }})</small>
+        {% endif %}
+        <span hx-post="/topics/{{ t.id }}/papers/{{ paper_id }}/toggle-seed"
+              hx-swap="outerHTML"
+              style="cursor:pointer; font-size:1.0rem;{% if not t.is_scout_seed %} opacity:0.25;{% endif %}"
+              title="{{ 'Remove from scout seeds for ' + t.name if t.is_scout_seed else 'Add to scout seeds for ' + t.name }}">🌱</span>
+    </div>
     {% endfor %}
 </div>
 {% else %}

@@ -20,12 +20,39 @@ The core workflow starts with the user seeding a topic:
 - Fetches 1-hop citations (papers citing it) and references (papers it cites)
 - Filters by topic keywords if set
 - Stores discovered papers, runs Haiku synthesis on each
-- User reviews the initial batch and adds human notes to steer future scouting
+- User reviews the initial batch, adds human notes, and **adds selected papers to the Scout
+  Seed List** to steer future scouting
 
 ### Step 4: Ongoing Scouting
-- Scheduled weekly (or manually triggered): check for new citations of all papers in the topic
-- New papers are filtered by keywords and scored by relevance to problem statements
-- Human notes on existing papers influence what's considered relevant
+- Scheduled weekly (or manually triggered): check for new citations of **seed papers only**
+  (papers the user has explicitly added to the topic's Scout Seed List)
+- New papers are filtered by topic keywords **and significant terms from problem statements**
+  (words >4 chars extracted from each problem statement sentence)
+- Haiku synthesis prompt includes: topic name, problem statements, keywords, and up to 5
+  most-recently-annotated human notes from other papers in the topic
+- Human notes on existing papers influence both filtering and synthesis context
+
+## Scout Seed List
+
+Each topic maintains a **Scout Seed List** — a curated subset of its associated papers whose
+citation neighbourhoods are traversed during scouting.
+
+### Rules
+- **Default: not a seed.** Any paper added to a topic (whether manually uploaded or discovered
+  via scouting) is NOT on the seed list unless the user explicitly adds it.
+- **Stored as a flag** `is_scout_seed` on the `topic_papers` join row — no separate table needed.
+- **Scouting uses seeds only.** Both "Scout Now" (manual) and the scheduled weekly job call
+  Semantic Scholar only for papers with `is_scout_seed = 1` in the topic. Papers associated
+  with a topic but not on the seed list are not used as traversal starting points.
+- **"Discover Citations" on the paper detail page is unaffected** — that is a per-paper,
+  user-triggered action independent of seed status.
+
+### UI — Topic Detail Page
+- The Papers panel in the topic detail page shows a seed toggle icon per paper (e.g. 🌱):
+  - 🌱 lit/coloured = paper is a seed; clicking removes it from the seed list
+  - 🌱 muted/outline = paper is not a seed; clicking adds it
+- Toggle fires `POST /topics/{topic_id}/papers/{paper_id}/toggle-seed`, swaps the icon in-place via htmx
+- No separate seed list section needed — the toggle is inline with each paper row
 
 ## Per-Paper Citation Enrichment
 
@@ -34,6 +61,27 @@ On any paper's detail page, a **"Discover Citations"** button allows the user to
 - Filters out papers already in the DB
 - New papers are stored and synthesized
 - This is user-triggered, not automatic — the user decides which branches to explore
+
+## Unprocessed Icon
+
+Papers without a human note show a small **unprocessed indicator** (hollow circle `○`, muted orange) wherever papers are listed:
+
+- **Topic detail page** — paper list in the right panel, inline after the paper title
+- **Papers list page** — narrow column to the left of the title (same position as the Read Next icon column)
+
+The icon disappears as soon as the user saves any human note for that paper (the template checks `has_human_note`, derived from `paper_notes.human_note IS NOT NULL AND != ''`). It is purely informational — no click action.
+
+## Read Next Flag
+
+Papers can be flagged as **"Read Next"** by the user — a simple bookmark/queue mechanism to track which papers to read soon.
+
+- **Per-paper flag** (not per-topic): stored as `read_next` on the `papers` table
+- **Togglable from two places**:
+  - **Paper list page**: clickable icon per row, toggles instantly via htmx
+  - **Paper detail page**: toggle button in the actions area
+- **Filtering**: paper list can be filtered to show only "Read Next" papers
+- **Visual indicator**: flagged papers are visually distinct in the list (e.g. bookmark icon)
+- The flag is purely user-driven — not set by LLM synthesis or scouting
 
 ## Structured Paper Note Format
 
@@ -76,7 +124,8 @@ The **Human Note** section is written by the user, not the LLM. It serves two pu
    - Notes are surfaced in the topic steering UI as context for keyword/problem statement adjustments
 
 ### Human Note in the webapp
-- **Paper detail page**: All structured note sections displayed. Human Note has an inline editable text area (htmx `PUT /papers/{id}/human-note`).
+- **Paper detail page**: All structured note sections displayed. Human Note uses a Quill rich text editor (bold, colour, lists, image/screenshot paste, hyperlinks).
+- Each paper detail page has a **Copy Link** button that copies an HTML anchor to the clipboard. Pasting this into another paper's Human Note creates a clickable cross-paper reference link.
 - **Topic steering page**: Aggregated human notes for a topic shown as context for steering decisions.
 
 ## Manual Paper Upload
@@ -84,15 +133,28 @@ The **Human Note** section is written by the user, not the LLM. It serves two pu
 Users can manually add papers to a topic at any time, not just during establishment.
 
 ### How it works
-- **Topic detail page** has an "Add Paper" button that opens an upload form
+- **Topic detail page** and **Papers list page** have an "Add Paper" button that opens an upload form
 - The user provides either:
-  - A **URL** (arXiv, SSRN, or any link):
-    - **arXiv URLs**: detected by pattern, metadata auto-extracted via arXiv API. Semantic Scholar ID resolved via `arXiv:{id}`.
-    - **Other URLs**: no auto-extraction — user fills in remaining fields manually. System attempts Semantic Scholar ID resolution via URL.
-  - A **PDF upload**: title and abstract extracted via pypdf, other fields manual
-  - **Manual entry**: user fills in title, authors, abstract, URL directly
+  - A **URL** (arXiv or DOI auto-extracts metadata; any other link stored as-is)
+  - A **PDF** — two modes:
+    - **Upload new**: upload a file and choose which subfolder under `Papers, Presentation, Reports and Slides` to save it in
+    - **Link existing**: select a subfolder then a filename from PDFs already present in `Papers, Presentation, Reports and Slides`; poneglyph records the path without copying the file
+  - **Manual entry** — fill in title, authors, abstract, URL directly (no PDF)
 - Paper created with `source = 'manual'`, linked to selected topics
 - Uploaded papers serve as starting points for citation discovery
+
+### Metadata auto-population priority
+When a user uploads a paper via URL or PDF, the system auto-populates metadata fields (title, authors, abstract, venue, date) using a fallback chain:
+
+1. **Source API metadata** (free, instant, authoritative):
+   - **arXiv URLs**: detected by pattern, metadata fetched via arXiv Atom API
+   - **Other recognized URLs**: resolved via Semantic Scholar API if possible
+2. **LLM extraction from PDF** (Haiku, ~$0.001/paper):
+   - If no source API metadata is available and a PDF is uploaded, Haiku reads the first few pages and extracts structured metadata
+3. **Manual fill-in** (user fallback):
+   - If both above fail (no recognized URL, no PDF, or LLM unavailable), the user fills in fields manually
+
+User-provided values always take precedence — auto-populated fields are only used for blank fields. A toast indicates the metadata source: "Metadata from arXiv" / "Metadata extracted from PDF" / "Please fill in metadata manually".
 
 ### Multi-topic association
 A single paper can be associated with multiple topics via `topic_papers`. Each association has its own relevance score and recommendation. Human notes are per-paper (shared across topics).

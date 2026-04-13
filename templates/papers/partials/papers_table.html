@@ -1,0 +1,36 @@
+{% if papers %}
+<table role="grid">
+    <thead>
+        <tr>
+            <th style="width: 2rem;"></th>
+            <th style="width: 1.5rem;"></th>
+            <th>Title</th>
+            <th>Authors</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for paper in papers %}
+        <tr>
+            <td>
+                <span hx-post="/papers/{{ paper.id }}/read-next" hx-swap="outerHTML"
+                      style="cursor:pointer; font-size:1.1rem;"
+                      title="{{ 'Remove from Read Next' if paper.read_next else 'Mark as Read Next' }}">
+                    {{ '🔖' if paper.read_next else '📄' }}
+                </span>
+            </td>
+            <td style="text-align: center;">
+                {% if paper.unprocessed %}
+                <span title="Unprocessed" style="color: #f59e0b; font-size: 0.85rem;">○</span>
+                {% endif %}
+            </td>
+            <td><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></td>
+            <td style="white-space: nowrap; color: var(--pico-muted-color);">{{ paper.authors | author_cite(paper.published_date) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>No papers found{% if q %} matching "<strong>{{ q }}</strong>"{% endif %}.</p>
+</div>
+{% endif %}

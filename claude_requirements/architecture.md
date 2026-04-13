@@ -53,9 +53,10 @@ poneglyph/
 - **topics**: name, description, keywords (JSON), problem_statements (JSON), pdf_policy ('link_only'|'download'), is_active
   - `keywords`: used for keyword-based search filtering and FTS5 queries
   - `problem_statements`: specific problems the user wants solutions to — drives relevance scoring and LLM prompts
-- **papers**: source, source_id, semantic_scholar_id, title, authors, published_venue, published_date, abstract, url, pdf_url, pdf_local_path
+- **papers**: source, source_id, semantic_scholar_id, title, authors, published_venue, published_date, abstract, url, pdf_url, pdf_local_path, read_next
   - `semantic_scholar_id`: Semantic Scholar paper ID (e.g. "649def34f8be52c8b66281af98ae884c09aef38b"). Used for citation graph traversal.
-- **topic_papers**: many-to-many linking + relevance_score (semantic similarity to topic's problem statements) + recommendation ('read'|'skip'|'deep_dive') — recommendation is per-topic, not per-paper
+  - `read_next`: boolean (INTEGER 0/1, default 0). User-set flag to mark papers for next reading. Togglable from paper list and paper detail pages.
+- **topic_papers**: many-to-many linking + relevance_score (semantic similarity to topic's problem statements) + recommendation ('read'|'skip'|'deep_dive') + `is_scout_seed` (INTEGER 0/1, default 0) — recommendation is per-topic, not per-paper; `is_scout_seed` controls which papers are used as citation traversal starting points during scouting
 - **paper_citations**: from_paper_id, to_paper_id, direction ('cites'|'cited_by')
   - Tracks the citation graph. `from_paper_id` cites `to_paper_id` when direction='cites'. Used to trace how papers were discovered.
 
@@ -86,11 +87,13 @@ poneglyph/
 5. New papers are stored with links to their source, and Haiku synthesis runs on each
 
 ### 2. Ongoing Scouting (scheduled or manual)
-1. For each active topic, get all papers in the topic
-2. Query Semantic Scholar for new citations of existing papers (papers not already in DB)
-3. Filter by keyword relevance: paper title/abstract must match at least one topic keyword
+1. For each active topic, get papers with `is_scout_seed = 1` in `topic_papers`
+   (topics with no seeds are skipped with a logged warning)
+2. Query Semantic Scholar for new citations of seed papers (papers not already in DB)
+3. Filter by keyword relevance: paper title/abstract must match at least one topic keyword or
+   significant term from problem statements
 4. Score relevance against problem statements via embeddings
-5. Store new papers, run Haiku synthesis
+5. Store new papers, run Haiku synthesis; newly stored papers have `is_scout_seed = 0`
 
 ### 3. Per-Paper Citation Enrichment (user-triggered)
 - On any paper's detail page, a **"Discover Citations"** button triggers 1-hop citation traversal for that specific paper
@@ -150,6 +153,7 @@ See individual phase files for details:
 
 1. [Phase 1: Foundation](phase1_foundation.md) — project skeleton, DB schema, topic CRUD
 1b. [Phase 1b: Frontend, Paper Pages & Launcher](phase1b_frontend.md) — UI polish, paper list/detail pages, manual paper upload, desktop shortcut
+1c. [Phase 1c: LLM Metadata Extraction](phase1c_llm_metadata.md) — Haiku extracts title, authors, abstract, venue, date from uploaded PDFs
 2. [Phase 2: Scouting & Synthesis](phase2_scouting_synthesis.md) — Semantic Scholar citation graph, Haiku auto-summarization, structured notes
 3. [Phase 3: Embeddings & Search](phase3_embeddings_search.md) — semantic ranking, relevance filtering, FTS5 + vector search
 4. [Phase 4: Deep Synthesis, Q&A & Cross-Paper](phase4_deep_synthesis_qa.md) — Opus deep dives, Q&A, monthly cross-paper synthesis

@@ -20,11 +20,30 @@
     </div>
 </article>
 
+<hr style="margin: 1.5rem 0;">
+
 <!-- Key Insights -->
 <article>
-    <header><strong>Key Insights</strong></header>
-    {% if note and note.key_insights and note.key_insights != {} %}
-        {% if note.key_insights is mapping %}
+    <header>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>Key Insights</strong>
+            {% if note and note.recommendation and note.recommendation != 'skip' %}
+            <span style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:1rem;
+                background:{% if note.recommendation == 'deep_dive' %}var(--pico-primary-background){% else %}var(--pico-secondary-background){% endif %};
+                color:{% if note.recommendation == 'deep_dive' %}var(--pico-primary-inverse){% else %}var(--pico-secondary-inverse){% endif %};">
+                {% if note.recommendation == 'deep_dive' %}⭐ Deep Dive{% else %}📖 Read{% endif %}
+            </span>
+            {% endif %}
+        </div>
+    </header>
+    {% if note and note.key_insights and note.key_insights != {} and note.key_insights != [] %}
+        {% if note.key_insights is iterable and note.key_insights is not string and note.key_insights is not mapping %}
+        <ul>
+            {% for insight in note.key_insights %}
+            <li>{{ insight }}</li>
+            {% endfor %}
+        </ul>
+        {% elif note.key_insights is mapping %}
             {% for key, value in note.key_insights.items() %}
                 <p><strong>{{ key }}:</strong> {{ value }}</p>
             {% endfor %}
@@ -32,7 +51,7 @@
             <p>{{ note.key_insights }}</p>
         {% endif %}
     {% else %}
-        <p style="color: var(--pico-muted-color); font-style: italic;">Pending synthesis (Phase 4)</p>
+        <p style="color: var(--pico-muted-color); font-style: italic;">Not yet synthesized.</p>
     {% endif %}
 </article>
 
@@ -42,7 +61,7 @@
     {% if note and note.trading_applications %}
         <p>{{ note.trading_applications }}</p>
     {% else %}
-        <p style="color: var(--pico-muted-color); font-style: italic;">Pending synthesis (Phase 4)</p>
+        <p style="color: var(--pico-muted-color); font-style: italic;">Not yet synthesized.</p>
     {% endif %}
 </article>
 
@@ -62,13 +81,123 @@
     </div>
 </article>
 
+<!-- PDF path inline edit -->
+<div id="pdf-path-section" style="margin-bottom: 0.5rem;">
+    {% if paper.pdf_local_path %}
+    <div id="pdf-path-view" style="display:flex; align-items:center; gap:0.75rem; font-size:0.85rem; color:var(--pico-muted-color);">
+        <span>PDF:
+            {% if is_url(paper.pdf_local_path) %}
+            <a href="{{ paper.pdf_local_path }}" target="_blank" rel="noopener" style="font-size:0.82rem;">{{ paper.pdf_local_path }}</a>
+            {% else %}
+            <code>{{ paper.pdf_local_path }}</code>
+            {% endif %}
+        </span>
+        <button class="outline secondary" style="font-size:0.78rem; padding:0.2rem 0.5rem; margin:0;"
+                onclick="document.getElementById('pdf-path-view').style.display='none';
+                         document.getElementById('pdf-path-edit').style.display='flex';">Edit path</button>
+    </div>
+    {% else %}
+    <div id="pdf-path-view" style="display:flex; align-items:center; gap:0.75rem; font-size:0.85rem; color:var(--pico-muted-color);">
+        <span>PDF: <em>not linked</em></span>
+        <button class="outline secondary" style="font-size:0.78rem; padding:0.2rem 0.5rem; margin:0;"
+                onclick="document.getElementById('pdf-path-view').style.display='none';
+                         document.getElementById('pdf-path-edit').style.display='flex';">Set path</button>
+    </div>
+    {% endif %}
+    <div id="pdf-path-edit" style="display:none; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <input id="pdf-path-input" type="text" value="{{ paper.pdf_local_path or '' }}"
+               placeholder="Full path or OneDrive URL"
+               style="flex:1; min-width:20rem; margin:0; font-size:0.85rem;">
+        <button style="width:auto; margin:0; font-size:0.85rem; padding:0.3rem 0.7rem;"
+                hx-put="/papers/{{ paper.id }}/pdf/path"
+                hx-vals="js:{pdf_local_path: document.getElementById('pdf-path-input').value}"
+                hx-target="#pdf-path-section"
+                hx-swap="outerHTML">Save</button>
+        <button class="outline secondary" style="width:auto; margin:0; font-size:0.85rem; padding:0.3rem 0.7rem;"
+                onclick="document.getElementById('pdf-path-view').style.display='flex';
+                         document.getElementById('pdf-path-edit').style.display='none';">Cancel</button>
+    </div>
+</div>
+
+<!-- Scout status area (populated when Discover Citations is triggered) -->
+<div id="scout-status-area" style="margin-bottom:0.5rem;"></div>
+
+<div id="pdf-manage-area"></div>
 <div class="actions" style="margin-top: 1rem;">
     <a href="/papers" role="button" class="outline secondary">Back to Papers</a>
-    {% if paper.url %}
-    <a href="{{ paper.url }}" role="button" class="outline" target="_blank" rel="noopener">Open Original</a>
+    <button class="outline" title="Copy HTML link to this paper — paste into any Human Note"
+            data-paper-id="{{ paper.id }}" data-paper-title="{{ paper.title }}"
+            onclick="copyPaperLink(this)">
+        Copy Link
+    </button>
+    {% if paper.unprocessed %}
+    <button class="outline" style="border-color:#f59e0b;color:#f59e0b;"
+            hx-post="/papers/{{ paper.id }}/unprocessed"
+            hx-target="this" hx-swap="outerHTML"
+            title="Mark as processed">&#9711; Unprocessed</button>
+    {% else %}
+    <button class="outline"
+            hx-post="/papers/{{ paper.id }}/unprocessed"
+            hx-target="this" hx-swap="outerHTML"
+            title="Mark as unprocessed">&#10003; Processed</button>
     {% endif %}
-    {% if paper.pdf_local_path %}
-    <a href="{{ paper.pdf_local_path }}" role="button" class="outline" target="_blank">View PDF</a>
+
+    <!-- Discover Citations -->
+    {% if topics %}
+        {% if topics|length == 1 %}
+        <button class="outline"
+                hx-post="/scout/paper/{{ paper.id }}"
+                hx-vals='{"topic_id": "{{ topics[0].id }}"}'
+                hx-target="#scout-status-area"
+                hx-swap="innerHTML"
+                hx-confirm="Discover citations for this paper via Semantic Scholar? (May take ~1 min)"
+                title="Find related papers via citation graph">
+            Discover Citations
+        </button>
+        {% else %}
+        <details style="display:inline;">
+            <summary role="button" class="outline" style="display:inline-block; width:auto;">Discover Citations ▾</summary>
+            <div style="position:absolute; background:var(--pico-card-background-color); border:1px solid var(--pico-form-element-border-color); border-radius:0.4rem; padding:0.5rem; z-index:10; margin-top:0.25rem;">
+                {% for t in topics %}
+                <button class="outline" style="display:block; width:100%; margin-bottom:0.25rem; text-align:left;"
+                        hx-post="/scout/paper/{{ paper.id }}"
+                        hx-vals='{"topic_id": "{{ t.id }}"}'
+                        hx-target="#scout-status-area"
+                        hx-swap="innerHTML"
+                        hx-confirm="Discover citations in context of topic '{{ t.name }}'?">
+                    {{ t.name }}
+                </button>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+    {% endif %}
+
+    <!-- Synthesize (on-demand) -->
+    {% if topics %}
+        {% if topics|length == 1 %}
+        <button class="outline secondary"
+                hx-post="/scout/synthesize/{{ paper.id }}"
+                hx-vals='{"topic_id": "{{ topics[0].id }}"}'
+                hx-confirm="Run Haiku synthesis for this paper? (~$0.001)"
+                title="Generate Key Insights and Trading Applications with Haiku">
+            Synthesize
+        </button>
+        {% endif %}
+    {% endif %}
+
+    {% if paper.pdf_local_path and is_url(paper.pdf_local_path) %}
+    <a href="{{ paper.pdf_local_path }}" role="button" class="outline" target="_blank" rel="noopener">Open Link</a>
+    <a role="button" class="outline secondary" tabindex="-1" style="opacity: 0.35; pointer-events: none; cursor: default;">Manage PDF</a>
+    {% elif paper.pdf_local_path %}
+    <button class="outline"
+            hx-post="/papers/{{ paper.id }}/pdf/save" hx-target="#pdf-manage-area" hx-swap="innerHTML">Download PDF</button>
+    <button class="outline"
+            hx-get="/papers/{{ paper.id }}/pdf/manage" hx-target="#pdf-manage-area" hx-swap="innerHTML">Manage PDF</button>
+    {% else %}
+    <a role="button" class="outline secondary" tabindex="-1" style="opacity: 0.35; pointer-events: none; cursor: default;">Download PDF</a>
+    <button class="outline"
+            hx-get="/papers/{{ paper.id }}/pdf/manage" hx-target="#pdf-manage-area" hx-swap="innerHTML">Upload PDF</button>
     {% endif %}
     <button class="outline contrast"
             hx-delete="/papers/{{ paper.id }}"
@@ -77,4 +206,30 @@
         Delete
     </button>
 </div>
+
+<script>
+function copyPaperLink(btn) {
+    var id = btn.getAttribute('data-paper-id');
+    var title = btn.getAttribute('data-paper-title');
+    var safe = title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    var html = '<a href="/papers/' + id + '">' + safe + '</a>';
+    var ok = false;
+    try {
+        var el = document.createElement('div');
+        el.contentEditable = 'true';
+        el.innerHTML = html;
+        el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+        document.body.appendChild(el);
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        ok = document.execCommand('copy');
+        sel.removeAllRanges();
+        document.body.removeChild(el);
+    } catch(e) { ok = false; }
+    showToast(ok ? 'Link copied — paste into any Human Note' : 'Copy failed — try right-click → Copy', ok ? 'success' : 'error');
+}
+</script>
 {% endblock %}

@@ -23,13 +23,16 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <strong>Edit: {{ topic.name }}</strong>
             <button class="outline secondary" style="margin:0; padding: 0.2rem 0.6rem;"
-                    onclick="document.getElementById('topic-form-area').innerHTML=''">
+                    onclick="['topic-form-area','topic-edit-area'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='';})">
                 Cancel
             </button>
         </div>
     </header>
-    <form hx-put="/topics/{{ topic.id }}" hx-target="#topic-{{ topic.id }}" hx-swap="outerHTML"
-          hx-on::after-request="if(event.detail.successful) document.getElementById('topic-form-area').innerHTML=''">
+    <form hx-put="/topics/{{ topic.id }}"
+          hx-target="{{ '#topic-edit-area' if from_detail else '#topic-' ~ topic.id }}"
+          hx-swap="{{ 'innerHTML' if from_detail else 'outerHTML' }}"
+          hx-on::after-request="if(event.detail.successful && !{{ 'true' if from_detail else 'false' }}) document.getElementById('topic-form-area').innerHTML=''">
+        <input type="hidden" name="from_detail" value="{{ '1' if from_detail else '0' }}">
         {% include "topics/partials/form_fields.html" %}
         <div style="display: flex; gap: 0.5rem;">
             <label>

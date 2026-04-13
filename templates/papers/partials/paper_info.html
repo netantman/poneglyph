@@ -24,6 +24,11 @@
     <label>Abstract / Executive Summary
         <textarea name="abstract" rows="4">{{ paper.abstract or '' }}</textarea>
     </label>
+    {% if paper.pdf_local_path %}
+    <label>PDF Path <small>(edit updates the DB link only — file is not moved)</small>
+        <input type="text" name="pdf_local_path" value="{{ paper.pdf_local_path }}">
+    </label>
+    {% endif %}
     <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
         <button type="submit" style="font-size: 0.85rem; padding: 0.35rem 0.7rem; width: auto; margin: 0;">
             Save <span id="info-save-ind" class="htmx-indicator"><span class="spinner"></span></span>
@@ -37,7 +42,20 @@
     </div>
 </form>
 {% else %}
-<h3 style="margin-bottom: 0.5rem;">{{ paper.title }}</h3>
+<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+    <h3 style="margin: 0;">{{ paper.title }}</h3>
+    <span hx-post="/papers/{{ paper.id }}/read-next" hx-swap="outerHTML"
+          style="cursor:pointer; font-size:1.3rem;"
+          title="{{ 'Remove from Read Next' if paper.read_next else 'Mark as Read Next' }}">
+        {{ '🔖' if paper.read_next else '📄' }}
+    </span>
+</div>
+{% if paper.url %}
+<p style="margin: 0 0 0.4rem 0; font-size: 0.85rem;">
+    <a href="{{ paper.url }}" target="_blank" rel="noopener" style="color: var(--pico-muted-color);">{{ paper.url }}</a>
+</p>
+{% endif %}
+<hr style="margin: 0.4rem 0 0.75rem 0; border: none; border-top: 1px solid #555;">
 {% if paper.authors %}
 <p>
     <strong>Authors:</strong>
@@ -50,16 +68,13 @@
     {{ paper.published_venue }}{% if paper.published_venue and paper.published_date %}, {% endif %}{{ paper.published_date }}
 </p>
 {% endif %}
-{% if paper.url %}
-<p><strong>Link:</strong> <a href="{{ paper.url }}" target="_blank" rel="noopener">{{ paper.url }}</a></p>
-{% endif %}
 {% if paper.abstract %}
 <details open style="margin-top: 0.5rem;">
     <summary><strong>Abstract / Executive Summary</strong></summary>
     <p style="margin-top: 0.5rem;">{{ paper.abstract }}</p>
 </details>
 {% endif %}
-<p style="color: var(--pico-muted-color); font-size: 0.85rem;">Added {{ paper.created_at[:10] }}</p>
+<p style="color: var(--pico-muted-color); font-size: 0.85rem;">Added {{ paper.created_at | nyc(fmt='%Y-%m-%d') }} ET</p>
 <button class="outline secondary" style="font-size: 0.85rem; padding: 0.3rem 0.7rem;"
         hx-get="/papers/{{ paper.id }}/info?edit=1"
         hx-target="#paper-info-section"

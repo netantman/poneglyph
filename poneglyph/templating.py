@@ -1,8 +1,12 @@
 """Shared Jinja2 templates instance to avoid circular imports."""
 
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
+
+_NYC = ZoneInfo("America/New_York")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -49,5 +53,28 @@ def _author_cite(authors: list[str] | str | None, year: str | None = None) -> st
     return citation
 
 
-# Register custom filters
+def _is_url(value: str | None) -> bool:
+    """Return True if the value looks like an http/https URL rather than a file path."""
+    if not value:
+        return False
+    v = value.strip()
+    return v.startswith("http://") or v.startswith("https://")
+
+
+def _nyc_time(value: str | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Convert a UTC datetime string (from SQLite) to NYC local time."""
+    if not value:
+        return ""
+    try:
+        # SQLite datetime('now') → "YYYY-MM-DD HH:MM:SS"
+        dt_utc = datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+        dt_nyc = dt_utc.astimezone(_NYC)
+        return dt_nyc.strftime(fmt)
+    except (ValueError, TypeError):
+        return str(value)
+
+
+# Register custom filters and globals
 templates.env.filters["author_cite"] = _author_cite
+templates.env.filters["nyc"] = _nyc_time
+templates.env.globals["is_url"] = _is_url

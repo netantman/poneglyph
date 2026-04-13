@@ -78,7 +78,14 @@
       "Bash(/c/Users/zhong/anaconda3/python.exe*)",
       "Bash(py -c \"from poneglyph.db import init_db; init_db\\(\\); print\\(''Schema OK''\\)\")",
       "Bash(.venvScriptspython -c \"from poneglyph.db import init_db; init_db\\(\\); print\\(''Schema OK''\\)\")",
-      "Bash(\"C:\\\\Users\\\\zhong\\\\anaconda3\\\\python.exe\" -c \"from poneglyph.db import init_db; init_db\\(\\); print\\(''Schema OK''\\)\")"
+      "Bash('C:\\\\Users\\\\zhong\\\\anaconda3\\\\python.exe' -c ':*)",
+      "Bash(\"C:\\\\Users\\\\zhong\\\\anaconda3\\\\python.exe\" -c \"from poneglyph.routes.papers import router; print\\('OK'\\)\")",
+      "Bash(\"C:\\\\Users\\\\zhong\\\\anaconda3\\\\python.exe\" -c \"from poneglyph.routes.papers import router; from poneglyph.db import init_db; init_db\\(\\); print\\('OK'\\)\")",
+      "Bash(pip show:*)",
+      "Bash(python -c ':*)",
+      "Bash(python3 -c ':*)",
+      "Bash(where py:*)",
+      "Bash(where uv:*)"
     ]
   }
 }

@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS papers (
     source          TEXT NOT NULL,                       -- 'arxiv', 'ssrn', 'kaggle', 'manual'
     source_id       TEXT NOT NULL,                       -- e.g. arXiv ID
     semantic_scholar_id TEXT,                            -- Semantic Scholar paper ID for citation graph
+    read_next       INTEGER NOT NULL DEFAULT 0,         -- user flag: 1 = read next
+    unprocessed     INTEGER NOT NULL DEFAULT 1,         -- user flag: 1 = needs review, 0 = processed
     title           TEXT NOT NULL,
     authors         TEXT NOT NULL DEFAULT '[]',          -- JSON list
     published_venue TEXT NOT NULL DEFAULT '',
@@ -49,6 +51,7 @@ CREATE TABLE IF NOT EXISTS topic_papers (
     matched_keywords TEXT NOT NULL DEFAULT '[]',         -- JSON list
     relevance_score REAL NOT NULL DEFAULT 0.0,
     recommendation  TEXT CHECK (recommendation IN ('read', 'skip', 'deep_dive')),
+    is_scout_seed   INTEGER NOT NULL DEFAULT 0,          -- 1 = used as seed in Scout Now / scheduler
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(topic_id, paper_id)
 );
@@ -167,11 +170,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
     p_cols = {row[1] for row in conn.execute("PRAGMA table_info(papers)").fetchall()}
     if "semantic_scholar_id" not in p_cols:
         conn.execute("ALTER TABLE papers ADD COLUMN semantic_scholar_id TEXT")
+    if "read_next" not in p_cols:
+        conn.execute("ALTER TABLE papers ADD COLUMN read_next INTEGER NOT NULL DEFAULT 0")
+    if "unprocessed" not in p_cols:
+        conn.execute("ALTER TABLE papers ADD COLUMN unprocessed INTEGER NOT NULL DEFAULT 1")
 
     # Add recommendation to topic_papers if missing
     tp_cols = {row[1] for row in conn.execute("PRAGMA table_info(topic_papers)").fetchall()}
     if "recommendation" not in tp_cols:
         conn.execute("ALTER TABLE topic_papers ADD COLUMN recommendation TEXT CHECK (recommendation IN ('read', 'skip', 'deep_dive'))")
+    if "is_scout_seed" not in tp_cols:
+        conn.execute("ALTER TABLE topic_papers ADD COLUMN is_scout_seed INTEGER NOT NULL DEFAULT 0")
 
     conn.commit()
 

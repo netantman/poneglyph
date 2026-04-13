@@ -15,5 +15,8 @@ This phase establishes the project skeleton: installable package, database schem
 - [x] Create `paper_citations` table: `from_paper_id` (FK), `to_paper_id` (FK), `direction` ('cites'|'cited_by'). Tracks how papers were discovered.
 - [x] Add `recommendation` column to `topic_papers` table ('read'|'skip'|'deep_dive', nullable). Per-topic recommendation, not per-paper.
 
+## Schema additions (user workflow)
+- [x] Add `read_next` boolean column to `papers` table (INTEGER, default 0). User-set flag to mark papers for next reading. Togglable from both paper list and paper detail pages.
+
 ## Status
 Complete

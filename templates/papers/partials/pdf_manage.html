@@ -1,0 +1,87 @@
+<dialog open style="max-width: 520px; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 999;">
+    <article>
+        <header>
+            <button aria-label="Close" rel="prev" onclick="this.closest('dialog').remove()"></button>
+            <strong>Manage PDF</strong>
+        </header>
+        <form hx-post="/papers/{{ paper.id }}/pdf/manage"
+              hx-target="#pdf-manage-area"
+              hx-swap="innerHTML"
+              hx-encoding="multipart/form-data">
+
+            <div style="display: flex; gap: 1.5rem; margin-bottom: 0.75rem;">
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                    <input type="radio" name="pdf_mode" value="upload" checked
+                           onchange="setPdfManageMode('upload')" style="margin: 0;">
+                    Upload new file
+                </label>
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                    <input type="radio" name="pdf_mode" value="link"
+                           onchange="setPdfManageMode('link')" style="margin: 0;">
+                    Link existing file
+                </label>
+            </div>
+
+            <!-- Upload mode -->
+            <div id="pm-upload-section">
+                <label>Folder
+                    <select name="subfolder">
+                        <option value="">— Select folder —</option>
+                        {% for sf in subfolders %}
+                        <option value="{{ sf }}" {% if sf == current_subfolder %}selected{% endif %}>{{ sf }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Upload new PDF <small>(leave empty to just move existing file)</small>
+                    <input type="file" name="pdf_file" accept=".pdf" id="manage-pdf-file"
+                           onchange="document.getElementById('extract-meta-row').style.display = this.files.length ? 'block' : 'none'">
+                </label>
+                <div id="extract-meta-row" style="display: none; margin-top: 0.25rem;">
+                    <label style="display: inline-flex; align-items: center; gap: 0.5rem; font-weight: normal;">
+                        <input type="checkbox" name="extract_metadata" value="true" style="margin: 0;">
+                        Extract metadata from PDF <small>(updates title, authors, abstract, venue, date)</small>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Link existing mode -->
+            <div id="pm-link-section" style="display: none;">
+                <div class="grid">
+                    <label>Folder
+                        <select name="pdf_existing_subfolder"
+                                hx-get="/papers/pdf/files"
+                                hx-target="#pm-files-list"
+                                hx-swap="innerHTML"
+                                hx-trigger="change"
+                                hx-include="this"
+                                onchange="document.getElementById('pm-file-input').value=''">
+                            <option value="">— Select folder —</option>
+                            {% for sf in subfolders %}
+                            <option value="{{ sf }}">{{ sf }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>File
+                        <input type="text" name="pdf_existing_filename" id="pm-file-input"
+                               list="pm-files-list"
+                               placeholder="Select a folder, then type to search"
+                               autocomplete="off" style="margin: 0;">
+                        <datalist id="pm-files-list"></datalist>
+                    </label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;">
+                <button type="submit" style="width: auto; margin: 0;">Save</button>
+                <button type="button" class="outline secondary" style="width: auto; margin: 0;"
+                        onclick="this.closest('dialog').remove()">Cancel</button>
+            </div>
+        </form>
+    </article>
+</dialog>
+<script>
+function setPdfManageMode(mode) {
+    document.getElementById('pm-upload-section').style.display = mode === 'upload' ? '' : 'none';
+    document.getElementById('pm-link-section').style.display = mode === 'link' ? '' : 'none';
+}
+</script>

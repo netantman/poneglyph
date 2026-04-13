@@ -54,7 +54,7 @@
     PDF Policy
     <select name="pdf_policy">
         <option value="link_only" {% if not topic or topic.pdf_policy == 'link_only' %}selected{% endif %}>
-            Link only (save space)
+            Source link only
         </option>
         <option value="download" {% if topic and topic.pdf_policy == 'download' %}selected{% endif %}>
             Download PDFs locally

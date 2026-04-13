@@ -16,7 +16,9 @@
 **Scouting and synthesis are independent of the webapp.** `scheduler_entry.py` is a standalone CLI that imports services directly, writes to the DB, and exits. No dependency on FastAPI or uvicorn. Both processes share the same SQLite database and service layer.
 
 **Scheduler**: Windows Task Scheduler calls `scheduler_entry.py` on two schedules:
-- Weekly: `--mode scout` — runs citation-graph scouting for all active topics (discover new citations of existing papers, filter, synthesize)
+- Weekly: `--mode scout` — for each active topic, runs citation-graph scouting using only
+  **seed papers** (`topic_papers.is_scout_seed = 1`). Topics with no seeds are skipped with
+  a logged warning. Newly discovered papers are added to the topic but are NOT seeds by default.
 - Monthly: `--mode cross-synthesis` — runs cross-paper synthesis for all topics
 
 **Launcher**: `launch_webapp.pyw` is a `.pyw` file (runs via `pythonw.exe`, no visible console window):
