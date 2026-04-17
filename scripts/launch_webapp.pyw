@@ -21,6 +21,9 @@ URL = f"http://{HOST}:{PORT}"
 # Resolve project root (one level up from scripts/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# Conda env Python — always use the poneglyph environment
+CONDA_PYTHON = Path(r"C:\Users\zhong\anaconda3\envs\poneglyph\python.exe")
+
 
 def _port_is_listening() -> bool:
     """Check if something is actively listening on the port."""
@@ -66,10 +69,13 @@ def main() -> None:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)
 
+    # Use conda env Python; fall back to current interpreter if env missing
+    python = str(CONDA_PYTHON) if CONDA_PYTHON.exists() else sys.executable
+
     # Start uvicorn as a subprocess
     server = subprocess.Popen(
         [
-            sys.executable,
+            python,
             "-m",
             "uvicorn",
             "poneglyph.app:app",

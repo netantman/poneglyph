@@ -1,16 +1,33 @@
-"""Scouting pipeline: citation discovery + Haiku synthesis."""
+"""Scouting pipeline: citation discovery + Haiku structural skim."""
 
+import hashlib
 import json
 import logging
 
 from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict
-from poneglyph.services.citation_scout import discover_from_paper
+from poneglyph.services.citation_scout import _lookup_key, discover_from_paper
 from poneglyph.services.llm_bulk import synthesize_paper
+from poneglyph.services.semantic_scholar import get_paper as s2_get_paper
 
 logger = logging.getLogger(__name__)
 
 # Max papers to synthesize per run — keeps cost and duration predictable
 MAX_SYNTH_PER_RUN = 30
+
+
+def _skill_hash(skill_md: str | None) -> str:
+    """Return SHA-256 hex digest of a skill prompt, or empty string if None."""
+    if not skill_md:
+        return ""
+    return hashlib.sha256(skill_md.encode()).hexdigest()
+
+
+def _ensure_topic_paper_note(topic_id: int, paper_id: int) -> None:
+    """Create a topic_paper_notes row if one doesn't exist yet."""
+    execute(
+        "INSERT OR IGNORE INTO topic_paper_notes (topic_id, paper_id) VALUES (?, ?)",
+        (topic_id, paper_id),
+    )
 
 
 # ---------- Run lifecycle ----------
@@ -34,13 +51,20 @@ def _finish_run(run_id: int, *, found: int, new: int, status: str = "ok", error:
 
 # ---------- Synthesis helper ----------
 
-async def _synthesize_paper(paper_id: int, topic: dict) -> bool:
-    """Run Haiku synthesis for one paper and persist results. Returns True on success."""
+async def _synthesize_paper(paper_id: int, topic: dict) -> str:
+    """Run Haiku structural skim for one paper in one topic and persist results.
+
+    Writes to topic_paper_notes (per-(paper,topic)) and mirrors skim_recommendation
+    to topic_papers.recommendation for the list view.
+    Returns "" on success, or a human-readable error string on failure.
+    """
     paper = row_to_dict(fetch_one("SELECT * FROM papers WHERE id = ?", (paper_id,)))
     if not paper:
-        return False
+        return "Paper not found in database"
 
-    # Gather human notes from other papers in the topic for context (most recently annotated)
+    topic_id = topic["id"]
+
+    # Gather human notes from other papers in the topic for context
     note_rows = fetch_all(
         """SELECT pn.human_note FROM paper_notes pn
            JOIN topic_papers tp ON tp.paper_id = pn.paper_id
@@ -48,33 +72,100 @@ async def _synthesize_paper(paper_id: int, topic: dict) -> bool:
            AND pn.human_note IS NOT NULL AND pn.human_note != ''
            ORDER BY pn.updated_at DESC
            LIMIT 5""",
-        (topic["id"], paper_id),
+        (topic_id, paper_id),
     )
     related_notes = [r["human_note"] for r in note_rows]
 
-    result = await synthesize_paper(paper, topic, related_notes)
+    result, err = await synthesize_paper(paper, topic, related_notes)
+    if err:
+        return err
     if not result:
-        return False
+        return ""  # no skill set — silent skip, not an error
+
+    _ensure_topic_paper_note(topic_id, paper_id)
+    skill_hash = _skill_hash(topic.get("skim_skill_md") or "")
 
     execute(
-        """UPDATE paper_notes
-           SET key_insights = ?, trading_applications = ?, recommendation = ?,
-               model_used = 'claude-haiku-4-5-20251001', updated_at = datetime('now')
-           WHERE paper_id = ?""",
+        """UPDATE topic_paper_notes
+           SET main_claim = ?, data_source = ?, strategy_type = ?,
+               headline_statistic = ?, signal_mechanism = ?, data_details = ?,
+               sample = ?, universe = ?, portfolio_construction = ?,
+               key_tables = ?, key_metrics = ?,
+               skim_recommendation = ?, skim_model_used = 'claude-haiku-4-5-20251001',
+               skim_skill_hash = ?, skim_generated_at = datetime('now'),
+               skim_pdf_used = ?
+           WHERE topic_id = ? AND paper_id = ?""",
         (
-            json.dumps(result["key_insights"]),
-            result["trading_applications"],
-            result["recommendation"],
+            result.get("main_claim", ""),
+            result.get("data_source", ""),
+            result.get("strategy_type", ""),
+            result.get("headline_statistic", ""),
+            result.get("signal_mechanism", ""),
+            result.get("data_details", ""),
+            result.get("sample", ""),
+            result.get("universe", ""),
+            result.get("portfolio_construction", ""),
+            json.dumps(result.get("key_tables", [])),
+            result.get("key_metrics", ""),
+            result.get("skim_recommendation", "skip"),
+            skill_hash,
+            1 if result.get("pdf_used") else 0,
+            topic_id,
             paper_id,
         ),
     )
 
-    # Also store recommendation in topic_papers for the list view
+    # Mirror recommendation to topic_papers for list view
     execute(
         "UPDATE topic_papers SET recommendation = ? WHERE topic_id = ? AND paper_id = ?",
-        (result["recommendation"], topic["id"], paper_id),
+        (result.get("skim_recommendation", "skip"), topic_id, paper_id),
     )
-    return True
+    return ""
+
+
+# ---------- S2 ID back-fill ----------
+
+async def resolve_missing_s2_ids(max_papers: int = 200) -> int:
+    """Resolve Semantic Scholar IDs for all papers that don't have one yet.
+
+    Iterates papers where semantic_scholar_id is NULL or empty, attempts to
+    resolve via S2 using the best available identifier (arXiv ID, DOI, URL),
+    and back-fills the column. Respects the S2 rate limiter (1 req/s).
+
+    Returns the number of papers successfully resolved.
+    """
+    rows = fetch_all(
+        """SELECT * FROM papers
+           WHERE semantic_scholar_id IS NULL OR semantic_scholar_id = ''
+           ORDER BY created_at DESC
+           LIMIT ?""",
+        (max_papers,),
+    )
+    if not rows:
+        return 0
+
+    logger.info("resolve_missing_s2_ids: %d papers to resolve", len(rows))
+    resolved = 0
+    for row in rows:
+        paper = row_to_dict(row)
+        lookup = _lookup_key(paper)
+        if not lookup:
+            continue
+        data = await s2_get_paper(lookup)
+        if not data:
+            continue
+        s2_id = data.get("paperId") or ""
+        if not s2_id:
+            continue
+        execute(
+            "UPDATE papers SET semantic_scholar_id = ? WHERE id = ? "
+            "AND (semantic_scholar_id IS NULL OR semantic_scholar_id = '')",
+            (s2_id, paper["id"]),
+        )
+        resolved += 1
+
+    logger.info("resolve_missing_s2_ids: resolved %d / %d", resolved, len(rows))
+    return resolved
 
 
 # ---------- Public pipeline entry points ----------
@@ -96,9 +187,14 @@ async def run_paper_enrichment(paper_id: int, topic_id: int, run_id: int) -> Non
         synth_ids = new_ids[:MAX_SYNTH_PER_RUN]
         synth_count = 0
         for pid in synth_ids:
-            if await _synthesize_paper(pid, topic):
+            err = await _synthesize_paper(pid, topic)
+            if not err:
                 synth_count += 1
+            elif err:
+                logger.warning("_synthesize_paper paper=%d: %s", pid, err)
 
+        from poneglyph.services.relevance import update_topic_relevance_scores
+        update_topic_relevance_scores(topic_id)
         _finish_run(run_id, found=len(new_ids), new=synth_count)
         logger.info(
             "run_paper_enrichment done: paper=%d topic=%d found=%d synth=%d",
@@ -120,6 +216,9 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
         if not topic:
             _finish_run(run_id, found=0, new=0, status="error", error="Topic not found")
             return
+
+        # Back-fill S2 IDs for any existing papers that are missing them before scouting
+        await resolve_missing_s2_ids()
 
         paper_rows = fetch_all(
             "SELECT paper_id FROM topic_papers WHERE topic_id = ? AND is_scout_seed = 1",
@@ -145,9 +244,14 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
         synth_ids = list(all_new)[:MAX_SYNTH_PER_RUN]
         synth_count = 0
         for pid in synth_ids:
-            if await _synthesize_paper(pid, topic):
+            err = await _synthesize_paper(pid, topic)
+            if not err:
                 synth_count += 1
+            elif err:
+                logger.warning("_synthesize_paper paper=%d: %s", pid, err)
 
+        from poneglyph.services.relevance import update_topic_relevance_scores
+        update_topic_relevance_scores(topic_id)
         _finish_run(run_id, found=len(all_new), new=synth_count)
         logger.info(
             "run_topic_scout done: topic=%d seeds=%d found=%d synth=%d",

@@ -73,11 +73,9 @@
 
     <footer>
         <small>
-            Sources:
-            {% for src in topic.sources %}
-                <span class="badge badge-source">{{ src }}</span>
-            {% endfor %}
-            &middot; PDF: {{ topic.pdf_policy }}
+            {% if topic.skim_skill_md %}Skim: ✓{% else %}Skim: ✗{% endif %}
+            &middot;
+            {% if topic.deep_synthesis_skill_md %}Deep: ✓{% else %}Deep: ✗{% endif %}
         </small>
     </footer>
 </article>

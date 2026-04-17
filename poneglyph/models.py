@@ -12,8 +12,6 @@ class TopicCreate(BaseModel):
     keywords: str = ""           # comma-separated, parsed into JSON list
     priority_keywords: str = ""  # comma-separated
     problem_statements: str = "" # newline-separated
-    sources: list[str] = Field(default_factory=lambda: ["arxiv"])
-    pdf_policy: str = "link_only"
 
 
 class TopicUpdate(BaseModel):
@@ -23,8 +21,6 @@ class TopicUpdate(BaseModel):
     keywords: str = ""
     priority_keywords: str = ""
     problem_statements: str = ""
-    sources: list[str] = Field(default_factory=lambda: ["arxiv"])
-    pdf_policy: str = "link_only"
     is_active: bool = True
 
 

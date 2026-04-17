@@ -18,11 +18,68 @@
         {% else %}
             <span class="badge badge-inactive">Paused</span>
         {% endif %}
+        {% if topic.skim_skill_md %}
+            <span style="font-size:0.72rem; font-weight:normal; padding:0.15rem 0.5rem;
+                         border-radius:1rem; background:rgba(22,163,74,0.15);
+                         color:#16a34a; vertical-align:middle;">Skim ✓</span>
+        {% else %}
+            <span style="font-size:0.72rem; font-weight:normal; padding:0.15rem 0.5rem;
+                         border-radius:1rem; background:rgba(220,38,38,0.12);
+                         color:#dc2626; vertical-align:middle;">Skim ✗</span>
+        {% endif %}
+        {% if topic.deep_synthesis_skill_md %}
+            <span style="font-size:0.72rem; font-weight:normal; padding:0.15rem 0.5rem;
+                         border-radius:1rem; background:rgba(22,163,74,0.15);
+                         color:#16a34a; vertical-align:middle;">Deep ✓</span>
+        {% else %}
+            <span style="font-size:0.72rem; font-weight:normal; padding:0.15rem 0.5rem;
+                         border-radius:1rem; background:rgba(100,116,139,0.15);
+                         color:var(--pico-muted-color); vertical-align:middle;">Deep ✗</span>
+        {% endif %}
     </h2>
     {% if topic.description %}
         <p>{{ topic.description }}</p>
     {% endif %}
 </hgroup>
+
+<div class="actions" style="margin-bottom: 1rem;">
+    <button class="outline"
+            hx-get="/topics/{{ topic.id }}/edit?from_detail=1"
+            hx-target="#topic-edit-area"
+            hx-swap="innerHTML"
+            onclick="window.scrollTo({top:0,behavior:'smooth'})">Edit Topic</button>
+    {% if topic.skim_skill_md %}
+    <button class="outline"
+            hx-post="/scout/topic/{{ topic.id }}"
+            hx-target="#scout-status-area"
+            hx-swap="innerHTML"
+            hx-confirm="Scout citations for {{ seed_count }} seed paper(s) in this topic? This calls Semantic Scholar and may take a few minutes."
+            hx-indicator="#scout-ind">
+        Scout Now
+        <span id="scout-ind" class="htmx-indicator"><span class="spinner"></span></span>
+    </button>
+    {% else %}
+    <button class="outline" disabled
+            title="Upload a Structural Skim skill first — edit this topic to add one">
+        Scout Now
+    </button>
+    {% endif %}
+    <button class="outline"
+            hx-post="/topics/{{ topic.id }}/recalculate-relevance"
+            hx-target="#topic-papers-list"
+            hx-swap="innerHTML"
+            hx-indicator="#relevance-ind">
+        Recalculate Relevance
+        <span id="relevance-ind" class="htmx-indicator"><span class="spinner"></span></span>
+    </button>
+    <button class="outline contrast"
+            hx-delete="/topics/{{ topic.id }}"
+            hx-confirm="Delete topic '{{ topic.name }}'? This cannot be undone."
+            hx-on::after-request="if(event.detail.successful) window.location='/topics'">
+        Delete
+    </button>
+</div>
+<div id="scout-status-area" style="margin-bottom: 0.5rem;"></div>
 
 <div id="topic-edit-area"></div>
 
@@ -31,22 +88,14 @@
     <div>
         <article>
             <header><strong>Keywords</strong></header>
-            {% for kw in topic.keywords %}
+            {% set all_keywords = (topic.keywords or []) + (topic.priority_keywords or []) %}
+            {% for kw in all_keywords %}
                 <span class="keyword-tag">{{ kw }}</span>
             {% endfor %}
-            {% if not topic.keywords %}
+            {% if not all_keywords %}
                 <em style="color: var(--pico-muted-color);">No keywords defined</em>
             {% endif %}
         </article>
-
-        {% if topic.priority_keywords %}
-        <article>
-            <header><strong>Priority Keywords</strong></header>
-            {% for kw in topic.priority_keywords %}
-                <span class="keyword-tag priority">{{ kw }}</span>
-            {% endfor %}
-        </article>
-        {% endif %}
 
         {% if topic.problem_statements %}
         <article>
@@ -62,12 +111,21 @@
         <article>
             <header><strong>Configuration</strong></header>
             <p>
-                <strong>Sources:</strong>
-                {% for src in topic.sources %}
-                    <span class="badge badge-source">{{ src }}</span>
-                {% endfor %}
+                <strong>Skim Skill:</strong>
+                {% if topic.skim_skill_md %}
+                <span style="color:#16a34a; font-size:0.85rem;">✓ Custom</span>
+                {% else %}
+                <span style="color:#dc2626; font-size:0.85rem;">✗ None — scouting disabled</span>
+                {% endif %}
             </p>
-            <p><strong>PDF Policy:</strong> {{ 'Source link only' if topic.pdf_policy == 'link_only' else 'Download PDFs locally' }}</p>
+            <p>
+                <strong>Deep Skill:</strong>
+                {% if topic.deep_synthesis_skill_md %}
+                <span style="color:#16a34a; font-size:0.85rem;">✓ Custom</span>
+                {% else %}
+                <span style="color:var(--pico-muted-color); font-size:0.85rem;">✗ None — deep synthesis disabled</span>
+                {% endif %}
+            </p>
             <p><strong>Created:</strong> {{ topic.created_at | nyc }} ET</p>
             <p><strong>Updated:</strong> {{ topic.updated_at | nyc }} ET</p>
         </article>
@@ -108,27 +166,4 @@
     </div>
 </div>
 
-<div class="actions" style="margin-top: 1rem;">
-    <button class="outline"
-            hx-get="/topics/{{ topic.id }}/edit?from_detail=1"
-            hx-target="#topic-edit-area"
-            hx-swap="innerHTML"
-            onclick="window.scrollTo({top:0,behavior:'smooth'})">Edit Topic</button>
-    <button class="outline"
-            hx-post="/scout/topic/{{ topic.id }}"
-            hx-target="#scout-status-area"
-            hx-swap="innerHTML"
-            hx-confirm="Scout citations for {{ seed_count }} seed paper(s) in this topic? This calls Semantic Scholar and may take a few minutes."
-            hx-indicator="#scout-ind">
-        Scout Now
-        <span id="scout-ind" class="htmx-indicator"><span class="spinner"></span></span>
-    </button>
-    <button class="outline contrast"
-            hx-delete="/topics/{{ topic.id }}"
-            hx-confirm="Delete topic '{{ topic.name }}'? This cannot be undone."
-            hx-on::after-request="if(event.detail.successful) window.location='/topics'">
-        Delete
-    </button>
-</div>
-<div id="scout-status-area" style="margin-top: 0.5rem;"></div>
 {% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Search — Poneglyph{% endblock %}
+{% block content %}
+<h2>Search Papers</h2>
+
+<form method="get" action="/search" style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.5rem;">
+    <div style="flex:1; min-width:200px;">
+        <input type="search" name="q" value="{{ q }}" placeholder="Search papers…" autofocus style="margin:0;">
+    </div>
+    <div>
+        <select name="mode" style="margin:0; width:auto;">
+            <option value="keyword" {% if mode == 'keyword' %}selected{% endif %}>Keyword</option>
+            <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>Semantic</option>
+            <option value="both" {% if mode == 'both' %}selected{% endif %}>Both</option>
+        </select>
+    </div>
+    <button type="submit" style="margin:0;">Search</button>
+</form>
+
+{% if error %}
+<p style="color:var(--pico-del-color);">{{ error }}</p>
+{% endif %}
+
+{% if q %}
+
+{% if mode in ('keyword', 'both') %}
+<h4>Keyword Results <small style="font-weight:normal;color:var(--pico-muted-color);">({{ keyword_results|length }})</small></h4>
+{% if keyword_results %}
+<table>
+    <thead><tr><th>Title</th><th>Authors</th><th>Year</th></tr></thead>
+    <tbody>
+    {% for p in keyword_results %}
+    <tr>
+        <td><a href="/papers/{{ p.id }}">{{ p.title }}</a></td>
+        <td style="font-size:0.85rem;color:var(--pico-muted-color);">
+            {% set authors = p.authors if p.authors is iterable and p.authors is not string else [] %}
+            {{ authors | join(', ') if authors else '—' }}
+        </td>
+        <td style="white-space:nowrap;">{{ (p.published_date or '')[:4] or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:var(--pico-muted-color);">No keyword matches found.</p>
+{% endif %}
+{% endif %}
+
+{% if mode in ('semantic', 'both') %}
+<h4 style="margin-top:1.5rem;">Semantic Results <small style="font-weight:normal;color:var(--pico-muted-color);">({{ semantic_results|length }})</small></h4>
+{% if semantic_results %}
+<table>
+    <thead><tr><th>Title</th><th>Authors</th><th>Year</th><th>Score</th></tr></thead>
+    <tbody>
+    {% for p in semantic_results %}
+    <tr>
+        <td><a href="/papers/{{ p.id }}">{{ p.title }}</a></td>
+        <td style="font-size:0.85rem;color:var(--pico-muted-color);">
+            {% set authors = p.authors if p.authors is iterable and p.authors is not string else [] %}
+            {{ authors | join(', ') if authors else '—' }}
+        </td>
+        <td style="white-space:nowrap;">{{ (p.published_date or '')[:4] or '—' }}</td>
+        <td style="white-space:nowrap;">{{ p.semantic_score }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:var(--pico-muted-color);">No papers have embeddings yet. Run scouting first to generate embeddings.</p>
+{% endif %}
+{% endif %}
+
+{% endif %}
+{% endblock %}

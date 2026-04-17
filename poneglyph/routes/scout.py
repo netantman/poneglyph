@@ -102,27 +102,3 @@ async def start_paper_enrichment(request: Request, paper_id: int, topic_id: int 
     run_id = create_run(topic_id, "paper_enrichment")
     asyncio.create_task(run_paper_enrichment(paper_id, topic_id, run_id))
     return HTMLResponse(_run_status_html(run_id))
-
-
-# ---------- Synthesize a single paper (on-demand) ----------
-
-@router.post("/synthesize/{paper_id}", response_class=HTMLResponse)
-async def synthesize_paper_route(request: Request, paper_id: int, topic_id: int = Form(...)):
-    """Re-run Haiku synthesis for a single paper in context of a topic."""
-    from poneglyph.pipeline import _synthesize_paper
-    from poneglyph.db import row_to_dict, fetch_one
-
-    topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
-    if not topic:
-        resp = HTMLResponse("")
-        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": "Topic not found", "type": "error"}})
-        return resp
-
-    ok = await _synthesize_paper(paper_id, topic)
-    msg = "Synthesis complete" if ok else "Synthesis failed — check API key / abstract"
-    t = "success" if ok else "error"
-    resp = HTMLResponse("")
-    resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": msg, "type": t}})
-    if ok:
-        resp.headers["HX-Refresh"] = "true"
-    return resp

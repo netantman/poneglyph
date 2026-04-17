@@ -14,15 +14,8 @@
 <label>
     Keywords <small>(comma-separated)</small>
     <input type="text" name="keywords"
-           value="{{ topic.keywords | join(', ') if topic and topic.keywords else '' }}"
+           value="{{ ((topic.keywords or []) + (topic.priority_keywords or [])) | join(', ') if topic else '' }}"
            placeholder="e.g. momentum, factor model, cross-section, alpha">
-</label>
-
-<label>
-    Priority Keywords <small>(comma-separated, higher search weight)</small>
-    <input type="text" name="priority_keywords"
-           value="{{ topic.priority_keywords | join(', ') if topic and topic.priority_keywords else '' }}"
-           placeholder="e.g. backtesting, out-of-sample">
 </label>
 
 <label>
@@ -32,32 +25,99 @@
 </label>
 
 <fieldset>
-    <legend>Sources</legend>
-    <label>
-        <input type="checkbox" name="sources" value="arxiv"
-               {% if not topic or 'arxiv' in (topic.sources or []) %}checked{% endif %}>
-        arXiv
+    <legend>Structural Skim Skill <small>(Haiku)</small></legend>
+    <label style="margin-bottom:0.4rem;">
+        <small><strong>Required</strong> before scouting or structural skim can run for this topic. No built-in default.
+        The system will append paper metadata and a fixed JSON output schema after your instructions.</small>
     </label>
-    <label>
-        <input type="checkbox" name="sources" value="ssrn"
-               {% if topic and 'ssrn' in (topic.sources or []) %}checked{% endif %}>
-        SSRN
-    </label>
-    <label>
-        <input type="checkbox" name="sources" value="kaggle"
-               {% if topic and 'kaggle' in (topic.sources or []) %}checked{% endif %}>
-        Kaggle
-    </label>
+    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.4rem;">
+        <label style="margin:0; font-size:0.85rem; white-space:nowrap;">Upload .md file:</label>
+        <input type="file" accept=".md" style="margin:0; font-size:0.85rem;"
+               onchange="loadSkillFile(this, 'skim_skill_md')">
+    </div>
+    <textarea id="skim-skill-textarea" name="skim_skill_md" rows="8"
+              placeholder="Paste your structural skim skill prompt here (Markdown). Required — scouting is disabled until this is set."
+              style="font-family:monospace; font-size:0.82rem;"
+              oninput="updateSkillPreview('skim-skill-textarea', 'skim-skill-preview', 'skim-skill-preview-text', 'skim-skill-char-count')">{{ topic.skim_skill_md or '' if topic else '' }}</textarea>
+    <details id="skim-skill-preview" style="margin-top:0.3rem; font-size:0.82rem;"
+             {% if topic and topic.skim_skill_md %}open{% endif %}>
+        <summary style="cursor:pointer; color:var(--pico-muted-color); user-select:none;">
+            Preview &nbsp;<span id="skim-skill-char-count" style="font-size:0.78rem;">{{ (topic.skim_skill_md or '')|length }} chars</span>
+        </summary>
+        <pre id="skim-skill-preview-text"
+             style="white-space:pre-wrap; font-size:0.78rem; margin:0.4rem 0 0;
+                    padding:0.6rem; border-radius:0.3rem;
+                    background:var(--pico-card-sectioning-background-color);
+                    color:var(--pico-muted-color); font-family:monospace; max-height:18rem; overflow-y:auto;">{{ topic.skim_skill_md or '' if topic else '' }}</pre>
+    </details>
 </fieldset>
 
-<label>
-    PDF Policy
-    <select name="pdf_policy">
-        <option value="link_only" {% if not topic or topic.pdf_policy == 'link_only' %}selected{% endif %}>
-            Source link only
-        </option>
-        <option value="download" {% if topic and topic.pdf_policy == 'download' %}selected{% endif %}>
-            Download PDFs locally
-        </option>
-    </select>
-</label>
+<fieldset>
+    <legend>Deep Synthesis Skill <small>(Sonnet / Opus)</small></legend>
+    <label style="margin-bottom:0.4rem;">
+        <small><strong>Required</strong> before deep synthesis can run for this topic. No built-in default.</small>
+    </label>
+    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.4rem;">
+        <label style="margin:0; font-size:0.85rem; white-space:nowrap;">Upload .md file:</label>
+        <input type="file" accept=".md" style="margin:0; font-size:0.85rem;"
+               onchange="loadSkillFile(this, 'deep_synthesis_skill_md')">
+    </div>
+    <textarea id="deep-skill-textarea" name="deep_synthesis_skill_md" rows="8"
+              placeholder="Paste your deep synthesis skill prompt here (Markdown). Required — deep synthesis is disabled until this is set."
+              style="font-family:monospace; font-size:0.82rem;"
+              oninput="updateSkillPreview('deep-skill-textarea', 'deep-skill-preview', 'deep-skill-preview-text', 'deep-skill-char-count')">{{ topic.deep_synthesis_skill_md or '' if topic else '' }}</textarea>
+    <details id="deep-skill-preview" style="margin-top:0.3rem; font-size:0.82rem;"
+             {% if topic and topic.deep_synthesis_skill_md %}open{% endif %}>
+        <summary style="cursor:pointer; color:var(--pico-muted-color); user-select:none;">
+            Preview &nbsp;<span id="deep-skill-char-count" style="font-size:0.78rem;">{{ (topic.deep_synthesis_skill_md or '')|length }} chars</span>
+        </summary>
+        <pre id="deep-skill-preview-text"
+             style="white-space:pre-wrap; font-size:0.78rem; margin:0.4rem 0 0;
+                    padding:0.6rem; border-radius:0.3rem;
+                    background:var(--pico-card-sectioning-background-color);
+                    color:var(--pico-muted-color); font-family:monospace; max-height:18rem; overflow-y:auto;">{{ topic.deep_synthesis_skill_md or '' if topic else '' }}</pre>
+    </details>
+</fieldset>
+
+<script>
+function loadSkillFile(input, targetName) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const ta = document.querySelector('textarea[name="' + targetName + '"]');
+        ta.value = e.target.result;
+        ta.dispatchEvent(new Event('input'));
+    };
+    reader.readAsText(file);
+}
+
+function updateSkillPreview(taId, detailsId, preId, countId) {
+    const text = document.getElementById(taId).value;
+    document.getElementById(preId).textContent = text;
+    document.getElementById(countId).textContent = text.length + ' chars';
+    if (text.trim()) document.getElementById(detailsId).open = true;
+    // Clear whitespace-only warning when user fixes content
+    const ta = document.getElementById(taId);
+    if (text === '' || text.trim()) ta.setCustomValidity('');
+}
+
+// Reject whitespace-only skill values before form submission
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector('form');
+    if (!form) return;
+    form.addEventListener('submit', e => {
+        ['skim-skill-textarea', 'deep-skill-textarea'].forEach(id => {
+            const ta = document.getElementById(id);
+            if (!ta) return;
+            if (ta.value !== '' && !ta.value.trim()) {
+                ta.setCustomValidity('Skill cannot be blank or whitespace only. Clear it entirely to remove the skill.');
+                ta.reportValidity();
+                e.preventDefault();
+            } else {
+                ta.setCustomValidity('');
+            }
+        });
+    });
+});
+</script>

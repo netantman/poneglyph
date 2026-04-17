@@ -1,0 +1,206 @@
+{% set has_skim = skim and (skim.main_claim or skim.signal_mechanism or skim.data_source or skim.strategy_type) %}
+{% if synthesis_error %}
+<div style="border:1px solid var(--pico-del-color); border-radius:0.4rem;
+            padding:0.75rem 1rem; background:rgba(220,38,38,0.08); margin-bottom:0.75rem;">
+    <strong style="display:block; margin-bottom:0.3rem;">⚠ Structural skim failed</strong>
+    <span style="font-size:0.9rem; color:var(--pico-muted-color);">{{ synthesis_error }}</span>
+    {% if has_skim %}
+    <p style="margin:0.4rem 0 0; font-size:0.82rem; color:var(--pico-muted-color);">
+        The previous skim is shown below — fix the issue above and regenerate.
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+{% set skim_stale = has_skim and current_skill_hash and skim.skim_skill_hash and skim.skim_skill_hash != current_skill_hash %}
+{% set rec = skim.skim_recommendation if has_skim else None %}
+
+{% if rec %}
+<div style="margin-bottom:0.75rem;">
+    {% if rec == 'deep_dive' %}
+    <span style="font-size:0.85rem; padding:0.2rem 0.6rem; border-radius:1rem;
+                 background:var(--pico-primary-background); color:var(--pico-primary-inverse);">
+        ⭐ Deep Dive
+    </span>
+    {% elif rec == 'read' %}
+    <span style="font-size:0.85rem; padding:0.2rem 0.6rem; border-radius:1rem;
+                 background:var(--pico-secondary-background); color:var(--pico-secondary-inverse);">
+        📖 Read
+    </span>
+    {% elif rec == 'skip' %}
+    <span style="font-size:0.85rem; padding:0.2rem 0.6rem; border-radius:1rem;
+                 background:var(--pico-card-sectioning-background-color); color:var(--pico-muted-color);">
+        ⏭ Skip
+    </span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if has_skim %}
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem 1.5rem; font-size:0.9rem;">
+    {% if skim.main_claim %}
+    <div style="grid-column:1/-1;">
+        <strong>Main Claim</strong>
+        <p style="margin:0.2rem 0 0.5rem;">{{ skim.main_claim }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.strategy_type %}
+    <div>
+        <strong>Strategy Type</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.strategy_type }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.headline_statistic %}
+    <div>
+        <strong>Headline Statistic</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.headline_statistic }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.signal_mechanism %}
+    <div>
+        <strong>Signal Mechanism</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.signal_mechanism }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.data_source or skim.data_details %}
+    <div>
+        <strong>Data</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">
+            {{ skim.data_source }}{% if skim.data_source and skim.data_details %} — {% endif %}{{ skim.data_details }}
+        </p>
+    </div>
+    {% endif %}
+
+    {% if skim.sample %}
+    <div>
+        <strong>Sample</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.sample }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.universe %}
+    <div>
+        <strong>Universe</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.universe }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.portfolio_construction %}
+    <div style="grid-column:1/-1;">
+        <strong>Portfolio Construction</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.portfolio_construction }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.key_metrics %}
+    <div style="grid-column:1/-1;">
+        <strong>Key Metrics</strong>
+        <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.key_metrics }}</p>
+    </div>
+    {% endif %}
+
+    {% if skim.key_tables and skim.key_tables != [] %}
+    <div style="grid-column:1/-1;">
+        <strong>Key Tables</strong>
+        <ul style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">
+            {% for t in skim.key_tables %}
+            <li>{{ t }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+<div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
+            font-size:0.8rem; color:var(--pico-muted-color); border-top:1px solid var(--pico-card-border-color); padding-top:0.5rem;">
+    {% if skim.skim_generated_at %}
+    <span>Last run: {{ skim.skim_generated_at | nyc }} ET</span>
+    {% endif %}
+    {% if skim.skim_model_used %}
+    <span>· {{ skim.skim_model_used }}</span>
+    {% endif %}
+    {% if skim.skim_pdf_used %}
+    <span style="color:#16a34a;">· 📄 PDF</span>
+    {% else %}
+    <span style="color:#f59e0b;">· abstract only</span>
+    {% endif %}
+    {% if skim_stale %}
+    <span style="color:#f59e0b;">⟳ Skill updated since last run</span>
+    {% endif %}
+    {% if skim_skill_md %}
+    <details style="display:inline; margin:0;">
+        <summary style="display:inline; cursor:pointer; color:var(--pico-primary);
+                        font-size:0.8rem; list-style:none; user-select:none;">
+            View skill ↗
+        </summary>
+        <div style="position:fixed; inset:0; z-index:900; display:flex; align-items:center;
+                    justify-content:center; background:rgba(0,0,0,0.55);"
+             onclick="this.closest('details').removeAttribute('open')">
+            <div style="background:var(--pico-card-background-color); border-radius:0.5rem;
+                        padding:1.25rem 1.5rem; max-width:72ch; width:90%; max-height:80vh;
+                        overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.45);"
+                 onclick="event.stopPropagation()">
+                <div style="display:flex; justify-content:space-between; align-items:center;
+                            margin-bottom:0.75rem;">
+                    <strong>Structural Skim Skill{% if topic_name %} — {{ topic_name }}{% endif %}</strong>
+                    {% if skim_stale %}
+                    <span style="font-size:0.75rem; color:#f59e0b;">⟳ Updated since last run</span>
+                    {% endif %}
+                    <button class="outline secondary" style="margin:0; padding:0.2rem 0.5rem;
+                                font-size:0.8rem; width:auto;"
+                            onclick="this.closest('details').removeAttribute('open')">✕</button>
+                </div>
+                <div class="skill-md" data-md="{{ skim_skill_md | e }}"></div>
+            </div>
+        </div>
+    </details>
+    {% endif %}
+    {% if topic_id and paper_id %}
+    {% if topic_has_skill %}
+    <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
+            hx-post="/papers/{{ paper_id }}/structural-skim"
+            hx-vals='{"topic_id": "{{ topic_id }}"}'
+            hx-target="#skim-tab-panel"
+            hx-swap="innerHTML"
+            hx-indicator="#skim-ind-{{ topic_id }}">
+        Regenerate{% if topic_name %} with {{ topic_name }}'s skill{% endif %}
+        <span id="skim-ind-{{ topic_id }}" class="htmx-indicator">
+            <span class="spinner" style="width:0.7em;height:0.7em;vertical-align:middle;display:inline-block;"></span>
+        </span>
+    </button>
+    {% else %}
+    <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
+            disabled title="Upload a Structural Skim skill for this topic first">
+        Regenerate
+    </button>
+    {% endif %}
+    {% endif %}
+</div>
+
+{% else %}
+<p style="color:var(--pico-muted-color); font-style:italic;">No structural skim yet.
+    {% if topic_id and paper_id %}
+    {% if topic_has_skill %}
+    <button class="outline" style="margin:0 0 0 0.5rem; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
+            hx-post="/papers/{{ paper_id }}/structural-skim"
+            hx-vals='{"topic_id": "{{ topic_id }}"}'
+            hx-target="#skim-tab-panel"
+            hx-swap="innerHTML"
+            hx-indicator="#skim-ind-{{ topic_id }}">
+        Generate Structural Skim
+        <span id="skim-ind-{{ topic_id }}" class="htmx-indicator">
+            <span class="spinner" style="width:0.7em;height:0.7em;vertical-align:middle;display:inline-block;"></span>
+        </span>
+    </button>
+    {% else %}
+    <button class="outline" style="margin:0 0 0 0.5rem; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
+            disabled title="Upload a Structural Skim skill for this topic first">
+        Generate Structural Skim
+    </button>
+    {% endif %}
+    {% endif %}
+</p>
+{% endif %}

@@ -7,7 +7,7 @@ from pathlib import Path
 from poneglyph.config import settings
 
 _SCHEMA_SQL = """
--- Topics: user-defined research areas with keywords and steering
+-- Topics: user-defined research areas with keywords, steering, and LLM skill prompts
 CREATE TABLE IF NOT EXISTS topics (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL UNIQUE,
@@ -15,10 +15,10 @@ CREATE TABLE IF NOT EXISTS topics (
     keywords        TEXT NOT NULL DEFAULT '[]',          -- JSON list of strings
     priority_keywords TEXT NOT NULL DEFAULT '[]',        -- JSON list of high-weight keywords
     problem_statements TEXT NOT NULL DEFAULT '[]',       -- JSON list of free-text problems
-    sources         TEXT NOT NULL DEFAULT '["arxiv"]',   -- JSON list: arxiv, ssrn, kaggle
-    pdf_policy      TEXT NOT NULL DEFAULT 'link_only'
-                        CHECK (pdf_policy IN ('link_only', 'download')),
+    sources         TEXT NOT NULL DEFAULT '[]',           -- reserved, unused
     is_active       INTEGER NOT NULL DEFAULT 1,
+    skim_skill_md   TEXT,                                -- Haiku structural skim prompt (Markdown)
+    deep_synthesis_skill_md TEXT,                        -- Sonnet/Opus deep synthesis prompt (Markdown)
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS topic_papers (
     relevance_score REAL NOT NULL DEFAULT 0.0,
     recommendation  TEXT CHECK (recommendation IN ('read', 'skip', 'deep_dive')),
     is_scout_seed   INTEGER NOT NULL DEFAULT 0,          -- 1 = used as seed in Scout Now / scheduler
+    not_interesting INTEGER NOT NULL DEFAULT 0,          -- 1 = user marked not relevant for this topic
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(topic_id, paper_id)
 );
@@ -66,22 +67,46 @@ CREATE TABLE IF NOT EXISTS paper_citations (
     UNIQUE(from_paper_id, to_paper_id, direction)
 );
 
--- Structured notes per paper (one row per paper)
+-- Paper-level notes (shared across topics)
 CREATE TABLE IF NOT EXISTS paper_notes (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     paper_id        INTEGER NOT NULL UNIQUE REFERENCES papers(id) ON DELETE CASCADE,
     paper_info      TEXT NOT NULL DEFAULT '{}',          -- JSON
-    key_insights    TEXT NOT NULL DEFAULT '{}',          -- JSON
-    trading_applications TEXT NOT NULL DEFAULT '',
     abstract_excerpt TEXT NOT NULL DEFAULT '',
-    recommendation  TEXT NOT NULL DEFAULT 'skip'
-                        CHECK (recommendation IN ('read', 'skip', 'deep_dive')),
-    human_note      TEXT,
-    model_used      TEXT NOT NULL DEFAULT '',
-    tier            TEXT NOT NULL DEFAULT 'bulk'
-                        CHECK (tier IN ('bulk', 'deep')),
+    human_note      TEXT,                                -- user annotation, shared across topics
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Per-(paper, topic) structural skim + deep synthesis outputs
+CREATE TABLE IF NOT EXISTS topic_paper_notes (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id                INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    paper_id                INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+    -- Structural skim: Pass 1 (Orientation)
+    main_claim              TEXT NOT NULL DEFAULT '',
+    data_source             TEXT NOT NULL DEFAULT '',
+    strategy_type           TEXT NOT NULL DEFAULT '',
+    headline_statistic      TEXT NOT NULL DEFAULT '',
+    -- Structural skim: Pass 2 (Structural skim)
+    signal_mechanism        TEXT NOT NULL DEFAULT '',
+    data_details            TEXT NOT NULL DEFAULT '',
+    sample                  TEXT NOT NULL DEFAULT '',
+    universe                TEXT NOT NULL DEFAULT '',
+    portfolio_construction  TEXT NOT NULL DEFAULT '',
+    key_tables              TEXT NOT NULL DEFAULT '[]', -- JSON list
+    key_metrics             TEXT NOT NULL DEFAULT '',
+    skim_recommendation     TEXT CHECK (skim_recommendation IN ('read', 'skip', 'deep_dive')),
+    skim_model_used         TEXT NOT NULL DEFAULT '',
+    skim_skill_hash         TEXT NOT NULL DEFAULT '', -- SHA-256 of skill at generation time
+    skim_generated_at       TEXT,
+    skim_pdf_used           INTEGER NOT NULL DEFAULT 0, -- 1 = PDF sections used; 0 = abstract only
+    -- Deep synthesis (Phase 4)
+    deep_synthesis          TEXT,
+    deep_synthesis_model_used TEXT NOT NULL DEFAULT '',
+    deep_skill_hash         TEXT NOT NULL DEFAULT '',
+    deep_generated_at       TEXT,
+    UNIQUE(topic_id, paper_id)
 );
 
 -- Cross-paper synthesis per topic
@@ -114,6 +139,21 @@ CREATE TABLE IF NOT EXISTS topic_steering_log (
     topic_id        INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     change_description TEXT NOT NULL,
     changed_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Paper embeddings (sentence-transformers, float32 blob)
+CREATE TABLE IF NOT EXISTS paper_embeddings (
+    paper_id    INTEGER PRIMARY KEY REFERENCES papers(id) ON DELETE CASCADE,
+    embedding   BLOB NOT NULL
+);
+
+-- Topic problem-statement embeddings (one row per PS)
+CREATE TABLE IF NOT EXISTS topic_embeddings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id    INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    ps_index    INTEGER NOT NULL,
+    embedding   BLOB NOT NULL,
+    UNIQUE(topic_id, ps_index)
 );
 
 -- FTS5 virtual table for full-text keyword search across papers
@@ -181,6 +221,117 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE topic_papers ADD COLUMN recommendation TEXT CHECK (recommendation IN ('read', 'skip', 'deep_dive'))")
     if "is_scout_seed" not in tp_cols:
         conn.execute("ALTER TABLE topic_papers ADD COLUMN is_scout_seed INTEGER NOT NULL DEFAULT 0")
+    if "not_interesting" not in tp_cols:
+        conn.execute("ALTER TABLE topic_papers ADD COLUMN not_interesting INTEGER NOT NULL DEFAULT 0")
+
+    # Add skim_pdf_used to topic_paper_notes if missing
+    tpn_cols = {row[1] for row in conn.execute("PRAGMA table_info(topic_paper_notes)").fetchall()}
+    if "skim_pdf_used" not in tpn_cols:
+        conn.execute("ALTER TABLE topic_paper_notes ADD COLUMN skim_pdf_used INTEGER NOT NULL DEFAULT 0")
+
+    # Add skill columns to topics if missing
+    t_cols = {row[1] for row in conn.execute("PRAGMA table_info(topics)").fetchall()}
+    if "skim_skill_md" not in t_cols:
+        conn.execute("ALTER TABLE topics ADD COLUMN skim_skill_md TEXT")
+    if "deep_synthesis_skill_md" not in t_cols:
+        conn.execute("ALTER TABLE topics ADD COLUMN deep_synthesis_skill_md TEXT")
+
+    # Create topic_paper_notes table if missing (new per-(paper,topic) synthesis storage)
+    tables = {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    if "topic_paper_notes" not in tables:
+        conn.executescript("""
+            CREATE TABLE topic_paper_notes (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic_id                INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                paper_id                INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+                main_claim              TEXT NOT NULL DEFAULT '',
+                data_source             TEXT NOT NULL DEFAULT '',
+                strategy_type           TEXT NOT NULL DEFAULT '',
+                headline_statistic      TEXT NOT NULL DEFAULT '',
+                signal_mechanism        TEXT NOT NULL DEFAULT '',
+                data_details            TEXT NOT NULL DEFAULT '',
+                sample                  TEXT NOT NULL DEFAULT '',
+                universe                TEXT NOT NULL DEFAULT '',
+                portfolio_construction  TEXT NOT NULL DEFAULT '',
+                key_tables              TEXT NOT NULL DEFAULT '[]',
+                key_metrics             TEXT NOT NULL DEFAULT '',
+                skim_recommendation     TEXT CHECK (skim_recommendation IN ('read', 'skip', 'deep_dive')),
+                skim_model_used         TEXT NOT NULL DEFAULT '',
+                skim_skill_hash         TEXT NOT NULL DEFAULT '',
+                skim_generated_at       TEXT,
+                deep_synthesis          TEXT,
+                deep_synthesis_model_used TEXT NOT NULL DEFAULT '',
+                deep_skill_hash         TEXT NOT NULL DEFAULT '',
+                deep_generated_at       TEXT,
+                UNIQUE(topic_id, paper_id)
+            );
+        """)
+
+    # Migrate existing skim data from paper_notes → topic_paper_notes (best-effort, one-time)
+    # Only runs when topic_paper_notes is empty and paper_notes has skim data
+    pn_cols = {row[1] for row in conn.execute("PRAGMA table_info(paper_notes)").fetchall()}
+    has_old_skim = "main_claim" in pn_cols
+    tpn_empty = conn.execute("SELECT COUNT(*) FROM topic_paper_notes").fetchone()[0] == 0
+    if has_old_skim and tpn_empty:
+        # For each paper with skim data, copy into topic_paper_notes for each linked topic
+        rows = conn.execute(
+            """SELECT pn.paper_id, pn.main_claim, pn.data_source, pn.strategy_type,
+                      pn.headline_statistic, pn.signal_mechanism, pn.data_details,
+                      pn.sample, pn.universe, pn.portfolio_construction, pn.key_tables,
+                      pn.key_metrics, pn.recommendation, pn.model_used
+               FROM paper_notes pn
+               WHERE pn.main_claim != '' OR pn.signal_mechanism != ''"""
+        ).fetchall()
+        for row in rows:
+            paper_id = row[0]
+            topic_links = conn.execute(
+                "SELECT topic_id FROM topic_papers WHERE paper_id = ?", (paper_id,)
+            ).fetchall()
+            for tlink in topic_links:
+                topic_id = tlink[0]
+                conn.execute(
+                    """INSERT OR IGNORE INTO topic_paper_notes
+                       (topic_id, paper_id, main_claim, data_source, strategy_type,
+                        headline_statistic, signal_mechanism, data_details, sample,
+                        universe, portfolio_construction, key_tables, key_metrics,
+                        skim_recommendation, skim_model_used)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        topic_id, paper_id,
+                        row[1], row[2], row[3], row[4], row[5], row[6],
+                        row[7], row[8], row[9], row[10], row[11],
+                        row[12], row[13] or "",
+                    ),
+                )
+
+    # Drop legacy structural-skim columns from paper_notes (moved to topic_paper_notes)
+    pn_cols_now = {row[1] for row in conn.execute("PRAGMA table_info(paper_notes)").fetchall()}
+    legacy_skim_cols = {
+        "main_claim", "data_source", "strategy_type", "headline_statistic",
+        "signal_mechanism", "data_details", "sample", "universe",
+        "portfolio_construction", "key_tables", "key_metrics",
+        "recommendation", "model_used", "generated_at",
+    }
+    if pn_cols_now & legacy_skim_cols:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS paper_notes_clean (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_id         INTEGER NOT NULL UNIQUE REFERENCES papers(id) ON DELETE CASCADE,
+                paper_info       TEXT NOT NULL DEFAULT '{}',
+                abstract_excerpt TEXT NOT NULL DEFAULT '',
+                human_note       TEXT,
+                created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            INSERT OR IGNORE INTO paper_notes_clean
+                (id, paper_id, paper_info, abstract_excerpt, human_note, created_at, updated_at)
+            SELECT id, paper_id, paper_info, abstract_excerpt, human_note, created_at, updated_at
+            FROM paper_notes;
+            DROP TABLE paper_notes;
+            ALTER TABLE paper_notes_clean RENAME TO paper_notes;
+        """)
 
     conn.commit()
 
@@ -242,7 +393,7 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
     # Parse known JSON columns
     for key in ("keywords", "priority_keywords", "problem_statements",
                 "sources", "authors", "matched_keywords", "paper_ids",
-                "research_directions", "paper_info", "key_insights"):
+                "research_directions", "paper_info", "key_tables"):
         if key in d and isinstance(d[key], str):
             try:
                 d[key] = json.loads(d[key])

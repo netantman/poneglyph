@@ -1,12 +1,26 @@
-# Phase 2: Scouting & Synthesis
+# Phase 2: Scouting & Structural Skim (Haiku)
+
+## Scope
+Phase 2 covers everything up to and including the **Haiku structural skim**. Deep synthesis (Sonnet/Opus) is handled in Phase 4.
+
+### Trigger policy
+The Haiku structural skim **auto-fires for every paper entering the system**, once per (paper, topic) pair:
+- Scheduled scouting (weekly Task Scheduler run)
+- Manual "Scout Now" on a topic
+- Per-paper "Discover Citations" enrichment
+- Manual upload (URL, PDF upload, PDF link, manual entry) — runs once per topic the paper is linked to at upload time
+- **"Generate Structural Skim"** button on the paper detail page (per topic tab) — on-demand regeneration or first-time run if the paper was added before the topic had a skill
 
 ## Deliverables
 - Semantic Scholar API service (citation/reference lookup, metadata, ID resolution)
 - Citation graph traversal logic (1-hop, both directions)
-- Haiku bulk synthesis service (structured notes for every discovered paper)
-- Pipeline: initial papers → resolve IDs → fetch citations/references → filter → store → synthesize
-- "Scout Now" button on topic detail page
+- **Per-topic Structural Skim skill**: upload/edit UI on the topic edit page; stored in `topics.skim_skill_md`
+- Haiku structural skim service that runs the topic's skill against each paper (Pass 1 + Pass 2)
+- **Per-(paper, topic) skim storage** in `topic_paper_notes`
+- Pipeline: initial papers → resolve IDs → fetch citations/references → filter → store → run skim
+- "Scout Now" button on topic detail page (disabled until skim skill is uploaded)
 - "Discover Citations" button on paper detail page
+- Structural Skim tabbed UI on the paper detail page (one tab per linked topic)
 
 ## TODO
 
@@ -29,13 +43,32 @@
     already linked; `new_ids` is driven by this return value, not by DB-insert status
   - Stores `paper_citations` and `topic_papers` rows; back-fills `semantic_scholar_id`
 
-### Haiku bulk synthesis
+### Per-topic Structural Skim skill
+- [ ] Topic edit page gains a **Structural Skim skill** field — file upload (`.md`) and inline editor (textarea). **Required before scouting or structural skim can run.** Stored in `topics.skim_skill_md` (TEXT, nullable). No built-in default — each topic must supply its own skill.
+- [ ] Topic Detail page shows a small "Skim skill: ✓ Custom" / "✗ None" badge.
+- [ ] Scout Now + Generate Structural Skim actions are **disabled with a tooltip** ("Upload a Structural Skim skill first") when `skim_skill_md` is NULL.
+- [ ] If `skim_skill_md` is NULL when synthesis is attempted programmatically, log a warning and skip — do not use any fallback prompt.
+- [ ] Validation on upload: reject blank/whitespace; show preview before save.
+
+### Haiku structural skim
 - [x] `services/llm_bulk.py`: Haiku structured note generation
-  - `synthesize_paper(paper, topic, related_notes)` → key_insights, trading_applications, recommendation
+  - `synthesize_paper(paper, topic, related_notes)` runs the topic's Structural Skim skill via claude-haiku-4-5
   - HTML stripping via `_HTMLStripper` (drops `<img>`, `<figure>`, `<svg>`)
-  - Recommendation: read | skip | deep_dive
-- [x] Results stored in `paper_notes` (key_insights, trading_applications, recommendation, model_used)
-- [x] Also stored in `topic_papers.recommendation` for list view
+  - **If `topic.skim_skill_md` is None or empty → return `{}` immediately** (no fallback prompt)
+  - **PDF-aware paper text extraction** (`extract_skim_sections`):
+    - If `paper.pdf_local_path` is set, is a local file, and pypdf can extract text → extract structured sections: abstract, introduction, conclusion, and figure/table captions. These are used as the paper text in the prompt.
+    - If no PDF or extraction fails → fall back to `paper.abstract` only. The prompt explicitly notes `[Source: abstract only]` so the skim fields can flag gaps accordingly.
+    - Extraction caps at ~12 000 chars to keep Haiku token cost low.
+- [x] Prompt assembly uses the topic's `skim_skill_md` as the skill/task instructions, followed by: paper metadata + extracted paper text (PDF sections or abstract-only), topic name, problem statements, keywords, up to 5 recent human notes from other papers in the topic, and the fixed JSON output schema. The user's skill defines what to extract — the system only appends paper context and output format.
+- [ ] The structural skim extracts the following fields (the user's skill determines methodology; the output JSON schema is fixed):
+  - `main_claim`, `data_source`, `strategy_type`, `headline_statistic`
+  - `signal_mechanism`, `data_details`, `sample`, `universe`, `portfolio_construction`
+  - `key_tables` (list), `key_metrics`
+  - `skim_recommendation`: read | skip | deep_dive
+- [ ] Results stored **per (paper, topic)** in `topic_paper_notes`:
+  - All skim fields, `skim_recommendation`, `skim_model_used`, `skim_skill_hash` (SHA-256 of the skill used), `skim_generated_at`
+- [x] Also stored in `topic_papers.recommendation` for list view (mirrors `skim_recommendation`)
+- [ ] Running skim for paper X against topic A does **not** touch topic B's row — each tab is independent.
 
 ### Pipeline orchestration
 - [x] `pipeline.py`: wires discovery + synthesis
@@ -50,14 +83,24 @@
 
 ### UI integration
 - [x] "Scout Now" button on topic detail page — `POST /scout/topic/{id}`, starts background task, HTMX polls `/scout/run/{run_id}` every 3s; shows prominent styled message box "Scouting in progress" while running, success/error box when done
+- [ ] Scout Now is disabled when `skim_skill_md` is NULL (tooltip: "Upload a Structural Skim skill first")
 - [x] "Discover Citations" button on paper detail page — topic dropdown if multiple, direct POST if one
-- [x] "Synthesize" button on paper detail page — on-demand single-paper synthesis
-- [x] Key Insights shown as bullet list; recommendation badge (⭐ Deep Dive / 📖 Read) in header
+- [x] "Generate Structural Skim" button on paper detail page — on-demand skim for the currently active topic tab (topic dropdown if multiple, direct POST if one)
+- [ ] **Per-topic tabbed Structural Skim section** on paper detail page:
+  - Tab bar appears only when paper is linked to ≥2 topics (single-topic papers render as before)
+  - One tab per linked topic, ordered by `topic_papers.relevance_score DESC, topics.name`
+  - Tab state preserved in URL (`?topic={topic_id}`); default is the highest-relevance topic
+  - Tab content swapped via htmx (`GET /papers/{id}/structural-skim?topic_id={tid}` returns the partial)
+  - Each tab shows: skim fields (reuse existing `papers/partials/structural_skim.html`), recommendation badge, `Regenerate with {topic name}'s skill` button, footer with `Last run (NYC time) / model / View skill ↗`
+  - `Last run` timestamp displayed in NYC local time (America/New_York) via the `nyc` Jinja2 filter
+  - `View skill ↗` opens a modal rendering the skill as formatted HTML (markdown rendered, not raw text) — same visual style as Claude chat previews
+  - "⟳ Skill updated since last run" badge when `topic_paper_notes.skim_skill_hash` ≠ current hash of `topics.skim_skill_md`
+- [x] Structural skim shown on paper detail: main claim, signal mechanism, sample, key metrics; recommendation badge (⭐ Deep Dive / 📖 Read / ⏭ Skip) in header
 - [x] Progress indicator: live polling with spinner until `finished_at` set
 
 ### Semantic Scholar ID resolution for existing papers
 - [x] `discover_from_paper` resolves and back-fills `semantic_scholar_id` on first scout
-- [ ] Retroactive bulk resolution for all existing papers (not yet implemented — triggered automatically on first scout)
+- [x] Retroactive bulk resolution for all existing papers — `resolve_missing_s2_ids()` in `pipeline.py`, called automatically at the start of every `run_topic_scout`
 
 ## Details
 
@@ -70,6 +113,7 @@
 ### Citation discovery flow
 ```
 Topic Scout Now / scheduled job
+  → Verify topic has a Structural Skim skill (skim_skill_md NOT NULL) — skip synthesis if missing
   → Fetch papers with is_scout_seed = 1 for this topic
   → If none: log warning, exit with status='no_seeds'
   → For each seed paper:
@@ -78,8 +122,12 @@ Topic Scout Now / scheduled job
       → GET /paper/{id}/references → papers it cites
       → Filter: already in DB? keyword/problem-statement term match on title+abstract?
       → Store new papers (linked to topic; is_scout_seed = 0 by default)
-      → Run Haiku synthesis on each (prompt includes: topic name, problem statements,
-        keywords, and up to 5 recent human notes from other papers in the topic)
+      → Run Haiku Structural Skim on each (only if skim_skill_md is set):
+        Prompt = topic.skim_skill_md (user's skill/instructions)
+                 + paper metadata/abstract + topic problem statements + keywords
+                 + up to 5 recent human notes from other papers in the topic
+                 + fixed JSON output schema
+        → Write one row to topic_paper_notes (UNIQUE topic_id, paper_id); tag with skim_skill_hash
 ```
 
 ### Handling papers without abstracts
@@ -90,11 +138,11 @@ Some Semantic Scholar entries have minimal metadata (no abstract, no venue). For
 - Flag these papers for user review ("incomplete metadata")
 
 ### Manual upload synthesis
-Papers uploaded manually (including arXiv URL uploads) also go through Haiku synthesis:
+Papers uploaded manually (including arXiv URL uploads) go through the Haiku structural skim **once per topic they are linked to that has a Structural Skim skill set**, using each topic's own skill:
 - arXiv URL uploads: LLM refines/supplements the API-fetched metadata
-- PDF uploads: LLM uses extracted PDF text
-- Manual entry: LLM works from provided title + abstract
-- This ensures manually uploaded papers have the same structured notes as discovered papers
+- PDF uploads: LLM uses extracted PDF text (reads abstract, intro contribution sentences, conclusion, then data/methodology)
+- Manual entry: LLM works from provided title + abstract (some Pass 2 fields may be *not found*)
+- If the paper is linked to N topics at upload time, N skim runs fire (one per topic) and N `topic_paper_notes` rows are created.
 
 ## Dependencies
 - Phase 1b (paper list/detail pages, manual upload)

@@ -25,12 +25,18 @@
 - [x] Paper list page (`/papers`) — compact table, one row per paper: Title | Authors (citation format). Filtered by topic dropdown. Relevance sorting comes in Phase 3. No source column — source labels are not shown in the UI.
 - [x] Paper detail page (`/papers/{id}`) — displays all structured note sections:
   - Paper Info (title, authors, venue, year, link)
-  - Key Insights (initially empty, populated in Phase 4)
-  - Applications for Trading & Investments (initially empty)
+  - **Structural Skim** — rich-format display of Pass 1 + Pass 2 outputs, **rendered per-topic**:
+    - If the paper is linked to exactly 1 topic: single section, no tab bar.
+    - If linked to ≥2 topics: **tab bar** above the section with one tab per linked topic (ordered by `topic_papers.relevance_score DESC` from Phase 3, then `topics.name`). Active tab state preserved in URL (`?topic={topic_id}`). Tab swap via htmx `GET /papers/{id}/structural-skim?topic_id={tid}` returning the partial.
+    - Each tab shows: Main Claim, Data Source & Sample Period, Strategy Type, Headline Statistic, Signal Mechanism, Data Details, Sample, Universe, Portfolio Construction, Key Tables, Key Metrics; recommendation badge (⭐ Deep Dive / 📖 Read / ⏭ Skip); footer with `Last run / model / View skill ↗` (modal showing the skill used).
+    - "⟳ Skill updated since last run" badge appears on the tab when `topic_paper_notes.skim_skill_hash` ≠ current hash of `topics.skim_skill_md`.
+    - Empty state when no skim exists for the active tab: "No structural skim for {topic name} yet." + Generate button.
+  - **"Generate Structural Skim with {topic} skill"** button in the active tab's footer — `POST /papers/{id}/structural-skim` with `topic_id={active}`; runs Haiku Pass 1 + Pass 2 against that topic's Structural Skim skill; htmx swaps the skim tab panel on completion; disabled with spinner while running. Disabled with tooltip "Upload a Structural Skim skill for this topic first" when the topic has no skill and the default is opted out.
+  - **Deep Synthesis** — same per-topic tabbed layout, populated by Phase 4; shows an empty state with a "Generate Deep Synthesis" button until Phase 4 is implemented.
   - Abstract/Executive Summary
-  - Human Note — inline editable text area (htmx `PUT /papers/{id}/human-note`)
+  - Human Note — **click-to-edit modal**: clicking anywhere on the Human Note section (view area) opens a `<div>`-based overlay (not native `<dialog>`, which Pico CSS overrides) with the Quill rich text editor at ~60 vh. The modal has a **Save** button (`PUT /papers/{id}/human-note`) and a **Cancel** button that discards changes; clicking the backdrop or ✕ also discards. Screenshot paste (data URL inline) and all Quill formatting are preserved inside the dialog editor. All singleton JS (Quill init, overlays, side panel, link dialog, ctx menu) lives in `detail.html` — not in the htmx-swappable partial — so it survives re-renders.
 - [x] All Paper Info fields are inline-editable (title, authors, venue, date, URL, abstract) — not just the human note
-- [x] Paper detail shows associated topics with links
+- [x] Paper detail shows associated topics with links — each topic badge links to the topic detail page (`/topics/{id}`), not the filtered papers list
 - [x] Enable the "Papers" nav link (no longer greyed out)
 
 ### Manual paper upload
@@ -64,6 +70,16 @@
 - [x] Amber `○` indicator inline after paper title in topic detail page paper panel
 - [x] Indicator disappears when paper is marked processed; reappears if toggled back
 
+### Not Interesting Flag
+- [x] `topic_papers.not_interesting` column — `INTEGER NOT NULL DEFAULT 0`; both `not_interesting` and `is_scout_seed` are per-topic-paper (on `topic_papers`), not per-paper
+- [x] Marking a paper not interesting for a topic **automatically clears its scout seed flag** for that topic (`is_scout_seed` set to 0 in same UPDATE)
+- [x] Attempting to seed a not-interesting paper returns an error toast and no DB change
+- [x] 🌱 and 🚫 co-rendered in a shared `<span id="tp-icons-{topic_id}-{paper_id}">` container; both toggles target and replace this container so both icons refresh atomically
+- [x] Not-interesting papers rendered with reduced opacity (0.45) in the topic detail paper list
+- [x] Not-interesting papers sort to the bottom: `ORDER BY p.read_next DESC, tp.not_interesting ASC, p.published_date DESC, p.created_at DESC`
+- [x] 🚫 toggle on paper detail page Topics section — per topic row, same shared container pattern
+- [x] Sort order updated to include `p.published_date DESC` — latest-published papers float up within each group
+
 ### Scout Seed List (topic detail page)
 - [x] `topic_papers.is_scout_seed` column — `INTEGER NOT NULL DEFAULT 0`; papers are not seeds by default
 - [x] Seed toggle icon per paper in the topic detail Papers panel, inline after the unprocessed indicator:
@@ -85,8 +101,19 @@
 
 ### Topic management
 - [x] Edit Topic form accessible inline from topic detail page (HTMX, scrolls to top) — handles both list-page inline swap and detail-page redirect on save
-- [x] Edit Topic form covers: name, description, keywords, priority keywords, problem statements, sources (arXiv/SSRN/Kaggle checkboxes), PDF Policy
-- [x] PDF Policy display name: **"Source link only"** (was "Link only")
+- [x] Edit Topic form covers: name, description, keywords, priority keywords, problem statements
+- [x] Priority Keywords collapsed into Keywords — single Keywords field on both form and detail page; `priority_keywords` DB column always saved as `[]`; existing priority keywords merged into keywords display
+- [x] Relevance score shown per paper in the topic detail paper list — displayed inline after authors as a muted 2 d.p. number; hidden when score is 0 or null
+- [x] PDF Policy removed — PDFs are never auto-downloaded; acquisition happens on-demand at deep synthesis time
+- [ ] **Topic Skills panel** on Edit Topic form — two sections:
+  - **Structural Skim skill** (Haiku, Phase 2): file-upload (`.md`) + inline `<textarea>` with a monospace font; stored in `topics.skim_skill_md`; **required** before scouting or structural skim can run for this topic — no built-in default
+  - **Deep Synthesis skill** (Sonnet/Opus, Phase 4): same controls; stored in `topics.deep_synthesis_skill_md`; **required** before deep synthesis can run for this topic — no built-in default
+  - Validation: reject blank/whitespace on save
+- [ ] **Topic Detail page header** shows two small badges:
+  - `Skim skill: ✓ Custom` / `✗ None`
+  - `Deep skill: ✓ Custom` / `✗ None`
+  - Clicking either badge scrolls to the Topic Skills panel (or opens the edit form if closed)
+- [ ] **Scout Now** button on topic detail page is disabled (with tooltip "Upload a Structural Skim skill first") when `skim_skill_md` is NULL.
 
 ### Cleanup
 - [x] Remove source column from paper list table (Title | Authors only, no Source column)
@@ -112,6 +139,7 @@
 - [x] Human Note uses Quill rich text editor: bold, italic, underline, strike, text colour, background colour, ordered/unordered lists, image embed, link; screenshot paste encoded as data URL inline
 - [x] Right-click context menu on selected text in Quill editor — shows "Add link" option; opens a URL input dialog; inserts link via `quill.format('link', url)`; menu repositions to stay within viewport
 - [x] Side panel (fixed right drawer, 45% width, CSS slide-in transition) — clicking any link in the Human Note view mode opens the panel with an iframe of the URL; header shows URL, "Open in tab ↗" fallback, and close button; panel, context menu, and dialog are DOM singletons that survive htmx re-renders of the note section
+- [x] Human Note view area is clickable (cursor: pointer, subtle hover highlight) — clicking anywhere on it opens a `<div>` overlay modal with the full Quill editor (~60 vh); modal has **Save** and **Cancel** buttons; Cancel/close discards unsaved changes; Save calls `PUT /papers/{id}/human-note` and swaps the view content
 
 ## Details
 
@@ -128,7 +156,12 @@
 A simple htmx-compatible toast: server returns an `HX-Trigger: showToast` header with a message, and a small JS listener displays it briefly. No library needed.
 
 ### Paper Note Page
-The paper detail page is the primary reading interface. All structured note sections are rendered in order (Paper Info → Key Insights → Trading Applications → Abstract → Human Note). Sections not yet populated (before bulk synthesis in Phase 4) show "Pending synthesis" placeholder. The Human Note is always editable regardless of synthesis status.
+The paper detail page is the primary reading interface. Sections render in order: **Paper Info → Structural Skim → Deep Synthesis → Abstract → Human Note → Topics → PDF**.
+
+- **Structural Skim** and **Deep Synthesis** are **per (paper, topic) pair**, pulled from `topic_paper_notes`. For multi-topic papers, each section renders a tab bar (one tab per linked topic, ordered by `topic_papers.relevance_score DESC` from Phase 3). The active tab is reflected in the URL (`?topic={topic_id}`) so tabs are deep-linkable.
+- Each tab's content is the output of that topic's skill on this paper (Structural Skim skill for Phase 2, Deep Synthesis skill for Phase 4). A "View skill" link in the tab footer opens a modal showing the exact prompt used.
+- When a topic's skill changes, the corresponding tab shows a "⟳ Skill updated since last run" badge until regenerated.
+- The **Human Note** is paper-level (shared across topics) and always editable.
 
 ### Manual Upload
 Papers uploaded manually use `source = 'manual'` and a generated UUID as `source_id` to satisfy the UNIQUE constraint on `(source, source_id)`. URL-based uploads attempt metadata extraction: arXiv URLs are parsed for the paper ID and fetched via the arXiv API; other URLs fall back to manual entry. PDF uploads are stored in `data/pdfs/` via `pdf_manager.py`.

@@ -9,6 +9,11 @@ from fastapi.responses import HTMLResponse
 def _toast_headers(message: str, toast_type: str = "success") -> dict:
     return {"HX-Trigger": json.dumps({"showToast": {"message": message, "type": toast_type}})}
 
+
+async def _run_relevance_update(topic_id: int) -> None:
+    from poneglyph.services.relevance import update_topic_relevance_scores
+    update_topic_relevance_scores(topic_id)
+
 from poneglyph.templating import templates
 from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict
 from poneglyph.models import parse_comma_list, parse_newline_list
@@ -51,27 +56,25 @@ async def create_topic(
     name: str = Form(...),
     description: str = Form(""),
     keywords: str = Form(""),
-    priority_keywords: str = Form(""),
     problem_statements: str = Form(""),
-    sources: list[str] = Form(default=["arxiv"]),
-    pdf_policy: str = Form("link_only"),
+    skim_skill_md: str = Form(""),
+    deep_synthesis_skill_md: str = Form(""),
 ):
     kw_list = parse_comma_list(keywords)
-    pkw_list = parse_comma_list(priority_keywords)
     ps_list = parse_newline_list(problem_statements)
 
     topic_id = execute(
         """INSERT INTO topics (name, description, keywords, priority_keywords,
-           problem_statements, sources, pdf_policy)
+           problem_statements, skim_skill_md, deep_synthesis_skill_md)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
             name.strip(),
             description.strip(),
             json.dumps(kw_list),
-            json.dumps(pkw_list),
+            json.dumps([]),
             json.dumps(ps_list),
-            json.dumps(sources),
-            pdf_policy,
+            skim_skill_md.strip() or None,
+            deep_synthesis_skill_md.strip() or None,
         ),
     )
 
@@ -98,13 +101,15 @@ async def view_topic(request: Request, topic_id: int):
     if not topic:
         return HTMLResponse("<p>Topic not found.</p>", status_code=404)
 
-    # Fetch papers linked to this topic, including scout-seed flag
+    # Fetch papers linked to this topic, including scout-seed and not_interesting flags
     paper_rows = fetch_all(
-        """SELECT p.*, tp.is_scout_seed
+        """SELECT p.*, tp.is_scout_seed, tp.not_interesting, tp.relevance_score
            FROM papers p
            JOIN topic_papers tp ON p.id = tp.paper_id
            WHERE tp.topic_id = ?
-           ORDER BY p.read_next DESC, p.created_at DESC
+           ORDER BY p.read_next DESC, tp.not_interesting ASC,
+                    COALESCE(tp.relevance_score, 1.0) DESC,
+                    p.published_date DESC, p.created_at DESC
            LIMIT 20""",
         (topic_id,),
     )
@@ -139,42 +144,48 @@ async def update_topic(
     name: str = Form(...),
     description: str = Form(""),
     keywords: str = Form(""),
-    priority_keywords: str = Form(""),
     problem_statements: str = Form(""),
-    sources: list[str] = Form(default=["arxiv"]),
-    pdf_policy: str = Form("link_only"),
     is_active: bool = Form(True),
     from_detail: int = Form(0),
+    skim_skill_md: str = Form(""),
+    deep_synthesis_skill_md: str = Form(""),
 ):
     old_topic = _topic_row(topic_id)
     if not old_topic:
         return HTMLResponse("<p>Topic not found.</p>", status_code=404)
 
     kw_list = parse_comma_list(keywords)
-    pkw_list = parse_comma_list(priority_keywords)
     ps_list = parse_newline_list(problem_statements)
 
     execute(
         """UPDATE topics
            SET name=?, description=?, keywords=?, priority_keywords=?,
-               problem_statements=?, sources=?, pdf_policy=?, is_active=?,
+               problem_statements=?, is_active=?,
+               skim_skill_md=?, deep_synthesis_skill_md=?,
                updated_at=datetime('now')
            WHERE id=?""",
         (
             name.strip(),
             description.strip(),
             json.dumps(kw_list),
-            json.dumps(pkw_list),
+            json.dumps([]),
             json.dumps(ps_list),
-            json.dumps(sources),
-            pdf_policy,
             int(is_active),
+            skim_skill_md.strip() or None,
+            deep_synthesis_skill_md.strip() or None,
             topic_id,
         ),
     )
 
     # Log steering changes
-    _log_steering_change(topic_id, old_topic, kw_list, pkw_list, ps_list)
+    _log_steering_change(topic_id, old_topic, kw_list, [], ps_list)
+
+    if old_topic.get("problem_statements", []) != ps_list:
+        from poneglyph.services.relevance import refresh_topic_embeddings, update_topic_relevance_scores
+        import asyncio
+        topic_for_embed = {**old_topic, "problem_statements": ps_list}
+        refresh_topic_embeddings(topic_id, topic_for_embed)
+        asyncio.create_task(_run_relevance_update(topic_id))
 
     if request.headers.get("HX-Request"):
         if from_detail:
@@ -237,21 +248,25 @@ async def topic_papers_list(request: Request, topic_id: int, q: str = ""):
     if q:
         like = f"%{q.lower()}%"
         paper_rows = fetch_all(
-            """SELECT p.*, tp.is_scout_seed
+            """SELECT p.*, tp.is_scout_seed, tp.not_interesting, tp.relevance_score
                FROM papers p
                JOIN topic_papers tp ON p.id = tp.paper_id
                WHERE tp.topic_id = ?
                AND (LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)
-               ORDER BY p.read_next DESC, p.created_at DESC""",
+               ORDER BY p.read_next DESC, tp.not_interesting ASC,
+                        COALESCE(tp.relevance_score, 1.0) DESC,
+                        p.published_date DESC, p.created_at DESC""",
             (topic_id, like, like),
         )
     else:
         paper_rows = fetch_all(
-            """SELECT p.*, tp.is_scout_seed
+            """SELECT p.*, tp.is_scout_seed, tp.not_interesting, tp.relevance_score
                FROM papers p
                JOIN topic_papers tp ON p.id = tp.paper_id
                WHERE tp.topic_id = ?
-               ORDER BY p.read_next DESC, p.created_at DESC""",
+               ORDER BY p.read_next DESC, tp.not_interesting ASC,
+                        COALESCE(tp.relevance_score, 1.0) DESC,
+                        p.published_date DESC, p.created_at DESC""",
             (topic_id,),
         )
     papers = [row_to_dict(r) for r in paper_rows]
@@ -261,36 +276,137 @@ async def topic_papers_list(request: Request, topic_id: int, q: str = ""):
     )
 
 
-# ---------- Scout seed toggle ----------
+# ---------- Seed + not-interesting icon helpers ----------
 
-def _seed_icon_html(topic_id: int, paper_id: int, is_seed: int) -> str:
-    """Return the htmx-wired seed toggle span for a paper row."""
-    style = "cursor:pointer; font-size:1.0rem;" + (
-        "" if is_seed else " opacity:0.3;"
+def _tp_icons_html(topic_id: int, paper_id: int, is_seed: int, not_interesting: int) -> str:
+    """Return the shared icon container for seed and not-interesting toggles.
+
+    Both toggles target this wrapper (hx-target="#tp-icons-{topic_id}-{paper_id}"),
+    so toggling either one refreshes both icons atomically.
+    """
+    seed_style = (
+        "cursor:pointer; font-size:1.0rem; flex-shrink:0; margin-top:0.1rem;"
+        + ("" if is_seed else " opacity:0.25;")
     )
-    title = "Remove from scout seeds" if is_seed else "Add to scout seeds"
+    seed_title = "Remove from scout seeds" if is_seed else "Add to scout seeds"
+
+    ni_style = (
+        "cursor:pointer; font-size:1.0rem; flex-shrink:0; margin-top:0.1rem;"
+        + ("" if not_interesting else " opacity:0.2;")
+    )
+    ni_title = "Mark as interesting" if not_interesting else "Mark as not interesting for this topic"
+
+    target = f"#tp-icons-{topic_id}-{paper_id}"
     return (
+        f'<span id="tp-icons-{topic_id}-{paper_id}" style="display:contents;">'
         f'<span hx-post="/topics/{topic_id}/papers/{paper_id}/toggle-seed" '
-        f'hx-swap="outerHTML" style="{style}" title="{title}">🌱</span>'
+        f'hx-target="{target}" hx-swap="outerHTML" '
+        f'style="{seed_style}" title="{seed_title}">🌱</span>'
+        f'<span hx-post="/topics/{topic_id}/papers/{paper_id}/toggle-not-interesting" '
+        f'hx-target="{target}" hx-swap="outerHTML" '
+        f'style="{ni_style}" title="{ni_title}">🚫</span>'
+        f'</span>'
     )
 
 
 @router.post("/{topic_id}/papers/{paper_id}/toggle-seed", response_class=HTMLResponse)
 async def toggle_scout_seed(request: Request, topic_id: int, paper_id: int):
     row = fetch_one(
-        "SELECT is_scout_seed FROM topic_papers WHERE topic_id = ? AND paper_id = ?",
+        "SELECT is_scout_seed, not_interesting FROM topic_papers WHERE topic_id = ? AND paper_id = ?",
         (topic_id, paper_id),
     )
     if not row:
         return HTMLResponse("", status_code=404)
+    # Cannot seed a paper marked not interesting
+    if not row["is_scout_seed"] and row["not_interesting"]:
+        resp = HTMLResponse(_tp_icons_html(topic_id, paper_id, 0, row["not_interesting"]))
+        resp.headers.update(_toast_headers("Mark as interesting first to seed this paper", "error"))
+        return resp
     new_val = 0 if row["is_scout_seed"] else 1
     execute(
         "UPDATE topic_papers SET is_scout_seed = ? WHERE topic_id = ? AND paper_id = ?",
         (new_val, topic_id, paper_id),
     )
     label = "Added to scout seeds" if new_val else "Removed from scout seeds"
-    resp = HTMLResponse(_seed_icon_html(topic_id, paper_id, new_val))
+    resp = HTMLResponse(_tp_icons_html(topic_id, paper_id, new_val, row["not_interesting"]))
     resp.headers.update(_toast_headers(label))
+    return resp
+
+
+@router.post("/{topic_id}/papers/{paper_id}/toggle-not-interesting", response_class=HTMLResponse)
+async def toggle_not_interesting(request: Request, topic_id: int, paper_id: int):
+    row = fetch_one(
+        "SELECT is_scout_seed, not_interesting FROM topic_papers WHERE topic_id = ? AND paper_id = ?",
+        (topic_id, paper_id),
+    )
+    if not row:
+        return HTMLResponse("", status_code=404)
+    new_not_interesting = 0 if row["not_interesting"] else 1
+    new_seed = 0 if new_not_interesting else row["is_scout_seed"]
+    execute(
+        "UPDATE topic_papers SET not_interesting = ?, is_scout_seed = ? WHERE topic_id = ? AND paper_id = ?",
+        (new_not_interesting, new_seed, topic_id, paper_id),
+    )
+    label = "Marked as not interesting" if new_not_interesting else "Marked as interesting"
+    resp = HTMLResponse(_tp_icons_html(topic_id, paper_id, new_seed, new_not_interesting))
+    resp.headers.update(_toast_headers(label))
+    return resp
+
+
+# ---------- Recalculate relevance scores ----------
+
+@router.post("/{topic_id}/recalculate-relevance", response_class=HTMLResponse)
+async def recalculate_relevance(request: Request, topic_id: int):
+    """Recompute relevance scores for all papers in the topic, return refreshed list."""
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("<p>Topic not found.</p>", status_code=404)
+
+    try:
+        from poneglyph.services.relevance import update_topic_relevance_scores
+        updated = update_topic_relevance_scores(topic_id)
+    except ImportError:
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers(
+            "sentence-transformers not installed — run: pip install sentence-transformers numpy",
+            "error",
+        ))
+        return resp
+    except Exception as exc:
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers(f"Relevance calculation failed: {exc}", "error"))
+        return resp
+
+    if updated == 0:
+        ps = topic.get("problem_statements") or []
+        msg = (
+            "No problem statements defined — add some to enable relevance scoring"
+            if not ps
+            else "No papers found to score"
+        )
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers(msg, "error"))
+        return resp
+
+    paper_rows = fetch_all(
+        """SELECT p.*, tp.is_scout_seed, tp.not_interesting, tp.relevance_score
+           FROM papers p
+           JOIN topic_papers tp ON p.id = tp.paper_id
+           WHERE tp.topic_id = ?
+           ORDER BY p.read_next DESC, tp.not_interesting ASC,
+                    COALESCE(tp.relevance_score, 1.0) DESC,
+                    p.published_date DESC, p.created_at DESC""",
+        (topic_id,),
+    )
+    papers = [row_to_dict(r) for r in paper_rows]
+    resp = templates.TemplateResponse(
+        "topics/partials/papers_list.html",
+        {"request": request, "topic": topic, "papers": papers, "show_all_link": False},
+    )
+    resp.headers.update(_toast_headers(f"Relevance scores updated for {updated} paper(s)"))
     return resp
 
 

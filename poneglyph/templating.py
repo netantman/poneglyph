@@ -74,7 +74,22 @@ def _nyc_time(value: str | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
         return str(value)
 
 
+def _md_to_html(value: str | None) -> str:
+    """Convert Markdown text to HTML. Returns empty string for None/empty input.
+    Falls back to <pre>-escaped text if the markdown package is not installed.
+    """
+    if not value:
+        return ""
+    try:
+        import markdown as _md
+        return _md.markdown(value, extensions=["extra", "nl2br", "sane_lists"])
+    except ImportError:
+        import html as _html
+        return f"<pre style='white-space:pre-wrap'>{_html.escape(value)}</pre>"
+
+
 # Register custom filters and globals
 templates.env.filters["author_cite"] = _author_cite
 templates.env.filters["nyc"] = _nyc_time
+templates.env.filters["md"] = _md_to_html
 templates.env.globals["is_url"] = _is_url

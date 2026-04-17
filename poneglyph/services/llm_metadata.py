@@ -39,7 +39,7 @@ async def extract_metadata_from_pdf(pdf_path: Path) -> dict:
         return {}
 
     prompt = _PROMPT_TEMPLATE.format(text=text[:_MAX_TEXT_CHARS])
-    response = await call_haiku(prompt, max_tokens=512)
+    response, _ = await call_haiku(prompt, max_tokens=512)
     if not response:
         return {}
 
