@@ -15,11 +15,25 @@ def get_pdf_base_dir() -> Path:
 
 
 def list_subfolders() -> list[str]:
-    """Return sorted list of subfolder names under the PDF base directory."""
+    """Return sorted list of top-level subfolder names under the PDF base directory."""
     base = get_pdf_base_dir()
     if not base.exists():
         return []
     return sorted([d.name for d in base.iterdir() if d.is_dir()])
+
+
+def list_all_pdf_files() -> list[str]:
+    """Return sorted list of all PDF relative paths under the base directory (recursive).
+
+    Paths use forward slashes, e.g. 'Research/Quant/paper.pdf'.
+    """
+    base = get_pdf_base_dir()
+    if not base.exists():
+        return []
+    return sorted(
+        [p.relative_to(base).as_posix() for p in base.rglob("*.pdf")],
+        key=str.lower,
+    )
 
 
 def _sanitize_filename(name: str) -> str:

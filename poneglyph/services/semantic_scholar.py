@@ -36,7 +36,7 @@ def _s2_key(identifier: str) -> str:
     s = identifier.strip()
     if s.startswith("http://") or s.startswith("https://"):
         return f"URL:{s}"
-    if s.startswith("arXiv:") or s.startswith("ARXIV:"):
+    if s.startswith("arXiv:") or s.startswith("ARXIV:") or s.startswith("DOI:"):
         return s
     if s.startswith("10.") or ("/" in s and not s.startswith("arXiv")):
         return f"DOI:{s}"
@@ -89,6 +89,15 @@ async def resolve_to_s2_id(identifier: str) -> str | None:
     """Resolve any identifier to a bare Semantic Scholar paper ID."""
     data = await get_paper(identifier)
     return data.get("paperId") if data else None
+
+
+async def search_paper(title: str, limit: int = 3) -> dict | None:
+    """Search for a paper by title. Returns the top result or None."""
+    data = await _get("/paper/search", {"query": title, "fields": _PAPER_FIELDS, "limit": limit})
+    if not data:
+        return None
+    results = data.get("data") or []
+    return results[0] if results else None
 
 
 async def get_citations(s2_id: str, limit: int = 100) -> list[dict]:

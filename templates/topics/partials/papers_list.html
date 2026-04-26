@@ -10,7 +10,7 @@
               title="{{ 'Remove from scout seeds' if paper.is_scout_seed else 'Add to scout seeds' }}">🌱</span>
         <span hx-post="/topics/{{ topic.id }}/papers/{{ paper.id }}/toggle-not-interesting"
               hx-target="#tp-icons-{{ topic.id }}-{{ paper.id }}" hx-swap="outerHTML"
-              style="cursor:pointer; font-size:1.0rem; flex-shrink:0; margin-top:0.1rem;{% if not paper.not_interesting %} opacity:0.2;{% endif %}"
+              style="cursor:pointer; font-size:1.0rem; flex-shrink:0; margin-top:0.1rem;{% if paper.not_interesting %} filter:drop-shadow(0 0 4px rgba(255,80,80,0.85));{% else %} opacity:0.2;{% endif %}"
               title="{{ 'Mark as interesting' if paper.not_interesting else 'Mark as not interesting for this topic' }}">🚫</span>
     </span>
     <span title="Relevance score" style="flex-shrink:0; font-size:0.78rem; color:var(--pico-muted-color); margin-top:0.2rem; min-width:2.5rem; text-align:right;">

@@ -1,7 +1,7 @@
 # Phase 1b: Frontend Polish, Paper Pages & Desktop Launcher
 
 ## Deliverables
-- Refined base template and navigation (Papers active, Search greyed out. No Synthesis link — synthesis is per-topic.)
+- Refined base template and navigation (Papers active. No Synthesis link — synthesis is per-topic. Search accessible via dashboard block.)
 - Toast/notification component for htmx feedback (e.g. "Topic saved", "Paper uploaded")
 - Dark mode toggle (Pico CSS supports `data-theme="dark"`)
 - Desktop shortcut launcher (`scripts/launch_webapp.pyw` + `.lnk` shortcut creation)
@@ -14,7 +14,7 @@
 
 ### Frontend polish
 - [x] Add toast/notification component for user feedback on htmx actions
-- [x] Add nav links for Papers (active), Search (disabled placeholder). No Synthesis link — synthesis is per-topic, accessed from topic detail page.
+- [x] Add nav link for Papers. No Synthesis link — synthesis is per-topic, accessed from topic detail page. Search accessible via dashboard block (not a nav link).
 - [x] Dark mode is the **default** (`data-theme="dark"`). Toggle persisted in localStorage.
 - [x] Loading indicator for htmx requests (htmx `hx-indicator`)
 - [x] Create `scripts/launch_webapp.pyw` — starts uvicorn subprocess (no console), opens browser to `http://127.0.0.1:8000`
@@ -47,7 +47,7 @@
 - [x] Three upload modes:
   - **URL**: paste a link. arXiv URLs are detected and metadata auto-extracted via arXiv API (title, authors, abstract, pdf_url). Other URLs fall back to manual entry.
   - **PDF upload**: upload a new PDF file (choose subfolder to save in) — LLM (Haiku) extracts title, authors, abstract, venue, date; falls back to manual entry if extraction fails
-  - **PDF link**: select an existing PDF already in `Papers, Presentation, Reports and Slides` by choosing subfolder then filename — poneglyph links it without copying
+  - **PDF link**: select an existing PDF already in `Papers, Presentation, Reports and Slides` by typing to search across all PDFs recursively (shown as relative paths) — poneglyph links it without copying
   - **Manual entry**: fill in title, authors, abstract, URL directly (no PDF)
 - [x] Paper created with `source = 'manual'`, `source_id` generated as UUID to satisfy UNIQUE(source, source_id) constraint
 - [x] Paper linked to all selected topics via `topic_papers`
@@ -105,15 +105,15 @@
 - [x] Priority Keywords collapsed into Keywords — single Keywords field on both form and detail page; `priority_keywords` DB column always saved as `[]`; existing priority keywords merged into keywords display
 - [x] Relevance score shown per paper in the topic detail paper list — displayed inline after authors as a muted 2 d.p. number; hidden when score is 0 or null
 - [x] PDF Policy removed — PDFs are never auto-downloaded; acquisition happens on-demand at deep synthesis time
-- [ ] **Topic Skills panel** on Edit Topic form — two sections:
+- [x] **Topic Skills panel** on Edit Topic form — two sections:
   - **Structural Skim skill** (Haiku, Phase 2): file-upload (`.md`) + inline `<textarea>` with a monospace font; stored in `topics.skim_skill_md`; **required** before scouting or structural skim can run for this topic — no built-in default
   - **Deep Synthesis skill** (Sonnet/Opus, Phase 4): same controls; stored in `topics.deep_synthesis_skill_md`; **required** before deep synthesis can run for this topic — no built-in default
   - Validation: reject blank/whitespace on save
-- [ ] **Topic Detail page header** shows two small badges:
+- [x] **Topic Detail page header** shows two small badges:
   - `Skim skill: ✓ Custom` / `✗ None`
   - `Deep skill: ✓ Custom` / `✗ None`
   - Clicking either badge scrolls to the Topic Skills panel (or opens the edit form if closed)
-- [ ] **Scout Now** button on topic detail page is disabled (with tooltip "Upload a Structural Skim skill first") when `skim_skill_md` is NULL.
+- [x] **Scout Now** button on topic detail page is disabled (with tooltip "Upload a Structural Skim skill first") when `skim_skill_md` is NULL.
 
 ### Cleanup
 - [x] Remove source column from paper list table (Title | Authors only, no Source column)
@@ -132,8 +132,8 @@
 - [x] Paper detail page shows the full PDF path if linked — inline editable via `PUT /papers/{id}/pdf/path`; updates DB only (does not move the file)
 - [x] Download PDF and Manage PDF (move) both check file existence before acting; toast error includes the missing path if not found
 - [x] Paper detail page has a **Copy Link** button that copies an HTML anchor (`<a href="/papers/{id}">Title</a>`) to the clipboard — can be pasted directly into another paper's Quill Human Note to create a clickable cross-paper link
-- [x] Manage PDF dialog supports two modes: **Upload new file** (save to chosen subfolder, optionally extract metadata) or **Link existing file** (pick folder + filename from files already on disk, no copy made)
-- [x] "Link existing file" File field is a searchable `<datalist>` input — user can type to filter filenames; populated by HTMX when folder is selected
+- [x] Manage PDF dialog supports two modes: **Upload new file** (save to chosen subfolder, optionally extract metadata) or **Link existing file** (pick any PDF already on disk, no copy made)
+- [x] "Link existing file" uses a **single searchable `<datalist>` input** showing all PDFs recursively as relative paths (e.g. `Research/Quant/paper.pdf`); populated once on page load via `GET /papers/pdf/all-files`; no folder dropdown — works at any nesting depth
 - [x] PDF location removed from Paper Info section (top) — already shown in the PDF row at the bottom of the detail page
 - [x] Paper URL shown as a small muted link directly under the title (not a "Link:" label row); blank if no URL. "View Link" button removed from action bar. Priority: scouted papers use source URL (arXiv/DOI set at upload); manual papers use user-entered DOI/URL; otherwise blank.
 - [x] Human Note uses Quill rich text editor: bold, italic, underline, strike, text colour, background colour, ordered/unordered lists, image embed, link; screenshot paste encoded as data URL inline

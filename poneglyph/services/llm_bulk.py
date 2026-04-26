@@ -1,12 +1,11 @@
 """Haiku bulk synthesis — run the topic's Structural Skim skill against a paper."""
 
-import json
+import base64
 import logging
-import re
 from html.parser import HTMLParser
 from pathlib import Path
 
-from poneglyph.services.llm import call_haiku
+from poneglyph.services.llm import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -52,36 +51,20 @@ def strip_html(html: str) -> str:
 
 # ---------- PDF section extraction ----------
 
-# Heading patterns for common section names
-_SECTION_PATTERNS = {
-    "abstract":     re.compile(r"^\s*abstract\s*$", re.I | re.M),
-    "introduction": re.compile(r"^\s*(?:1[\.\s]+)?introduction\s*$", re.I | re.M),
-    "conclusion":   re.compile(r"^\s*(?:\d+[\.\s]+)?conclusions?\s*(?:and\s+\w+)?\s*$", re.I | re.M),
-}
-
-# Caption lines: "Figure 1:", "Table 2 —", etc.
-_CAPTION_RE = re.compile(r"^((?:fig(?:ure)?|table)\.?\s*\d+[.:—\s].{10,200})$", re.I | re.M)
-
 _MAX_SKIM_CHARS = 12_000
-
-
-def _extract_section(text: str, pattern: re.Pattern, max_chars: int = 3000) -> str:
-    """Return up to max_chars of text starting from the first line matching pattern."""
-    m = pattern.search(text)
-    if not m:
-        return ""
-    start = m.end()
-    # Stop at the next section heading (a short all-caps or title-case line)
-    next_heading = re.search(r"\n[A-Z][A-Z\s]{2,50}\n|\n\d+[\.\s]+[A-Z]", text[start:])
-    end = start + (next_heading.start() if next_heading else max_chars)
-    return text[start:end].strip()[:max_chars]
+_HEAD_CHARS = 8_000
+_TAIL_CHARS = 4_000
 
 
 def extract_skim_sections(pdf_path: str) -> tuple[str, bool]:
-    """Extract abstract, introduction, conclusion and figure/table captions from a PDF.
+    """Extract text from a PDF for structural skim using head+tail sampling.
+
+    Returns the first 8 000 chars (opening/exec summary) and last 4 000 chars
+    (conclusions/recommendations), labelled [Opening] and [Closing]. This is robust
+    to OCR artifacts and non-academic structures like bank research reports.
 
     Returns:
-        (text, is_pdf)  — is_pdf=True when PDF sections were used, False on fallback.
+        (text, is_pdf) — is_pdf=True when PDF was read, False on fallback.
     """
     path = Path(pdf_path)
     if not path.exists() or path.suffix.lower() != ".pdf":
@@ -89,7 +72,6 @@ def extract_skim_sections(pdf_path: str) -> tuple[str, bool]:
 
     try:
         from pypdf import PdfReader
-        from pypdf.errors import PdfReadError
     except ImportError:
         return "", False
 
@@ -112,31 +94,12 @@ def extract_skim_sections(pdf_path: str) -> tuple[str, bool]:
         logger.warning("extract_skim_sections: could not read %s: %s", pdf_path, exc)
         return "", False
 
-    parts: list[str] = []
+    if len(full_text) <= _MAX_SKIM_CHARS:
+        return full_text, True
 
-    abstract = _extract_section(full_text, _SECTION_PATTERNS["abstract"], 1500)
-    if abstract:
-        parts.append(f"[Abstract]\n{abstract}")
-
-    intro = _extract_section(full_text, _SECTION_PATTERNS["introduction"], 3000)
-    if intro:
-        parts.append(f"[Introduction]\n{intro}")
-
-    conclusion = _extract_section(full_text, _SECTION_PATTERNS["conclusion"], 3000)
-    if conclusion:
-        parts.append(f"[Conclusion]\n{conclusion}")
-
-    # Figure and table captions (up to 20)
-    captions = _CAPTION_RE.findall(full_text)
-    if captions:
-        caption_block = "\n".join(c.strip() for c in captions[:20])
-        parts.append(f"[Key Figure / Table Captions]\n{caption_block}")
-
-    if not parts:
-        # Fell back: no recognisable sections found — use first 3000 chars
-        parts.append(f"[Paper text — section headings not detected]\n{full_text[:3000]}")
-
-    combined = "\n\n".join(parts)
+    head = full_text[:_HEAD_CHARS]
+    tail = full_text[-_TAIL_CHARS:]
+    combined = f"[Opening]\n{head}\n\n[Closing]\n{tail}"
     return combined[:_MAX_SKIM_CHARS], True
 
 
@@ -163,23 +126,8 @@ Problem statements:
 
 Keywords: {keywords}
 {notes_section}
-Reply with ONLY a valid JSON object (no markdown fences, no commentary):
-{{
-  "main_claim": "2-3 sentences",
-  "data_source": "source and period",
-  "strategy_type": "type",
-  "headline_statistic": "stat or empty string if not found",
-  "signal_mechanism": "mechanism description",
-  "data_details": "specific sources",
-  "sample": "period, frequency, asset class, geography",
-  "universe": "description of universe",
-  "portfolio_construction": "method description",
-  "key_tables": ["Table 1: Main results", "Table 3: Robustness"],
-  "key_metrics": "metrics mentioned",
-  "recommendation": "read|skip|deep_dive"
-}}
-
-If a field cannot be determined from the available text, use an empty string (or empty list for key_tables).\
+Use the record_skim tool to record your findings. \
+For any field you cannot determine from the available text, use an empty string (or empty list for key_tables).\
 """
 
 _SKIM_FIELDS = (
@@ -187,6 +135,33 @@ _SKIM_FIELDS = (
     "signal_mechanism", "data_details", "sample", "universe",
     "portfolio_construction", "key_tables", "key_metrics",
 )
+
+_SKIM_TOOL = {
+    "name": "record_skim",
+    "description": "Record the structural skim results for a paper.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "main_claim": {"type": "string"},
+            "data_source": {"type": "string"},
+            "strategy_type": {"type": "string"},
+            "headline_statistic": {"type": "string"},
+            "signal_mechanism": {"type": "string"},
+            "data_details": {"type": "string"},
+            "sample": {"type": "string"},
+            "universe": {"type": "string"},
+            "portfolio_construction": {"type": "string"},
+            "key_tables": {"type": "array", "items": {"type": "string"}},
+            "key_metrics": {"type": "string"},
+            "recommendation": {"type": "string", "enum": ["read", "skip", "deep_dive"]},
+        },
+        "required": [
+            "main_claim", "data_source", "strategy_type", "headline_statistic",
+            "signal_mechanism", "data_details", "sample", "universe",
+            "portfolio_construction", "key_tables", "key_metrics", "recommendation",
+        ],
+    },
+}
 
 
 async def synthesize_paper(
@@ -213,20 +188,30 @@ async def synthesize_paper(
     authors_str = ", ".join(authors[:6]) if isinstance(authors, list) else str(authors)
 
     # --- Paper content: PDF sections if available, else abstract ---
-    pdf_path = (paper.get("pdf_local_path") or "").strip()
+    pdf_path = (paper.get("pdf_local_path") or "").strip().strip("'\"")
     is_pdf = False
+    use_native_pdf = False  # send PDF bytes directly to Anthropic API
     paper_content = ""
 
     if pdf_path and not pdf_path.startswith("http"):
         paper_content, is_pdf = extract_skim_sections(pdf_path)
+        if not paper_content:
+            # Scanned/image PDF — pypdf extracted no text; flag for native API upload
+            use_native_pdf = Path(pdf_path).exists()
 
-    if not paper_content:
+    if not paper_content and not use_native_pdf:
         # Fallback: abstract only
         abstract = (paper.get("abstract") or "").strip()
         paper_content = abstract[:2000] if abstract else "(no abstract available)"
-        is_pdf = False
+    elif use_native_pdf:
+        paper_content = "(see attached PDF document)"
 
-    content_source = "PDF: abstract + introduction + conclusion + captions" if is_pdf else "abstract only — no PDF available"
+    if use_native_pdf:
+        content_source = "PDF (full document, image/scanned)"
+    elif is_pdf:
+        content_source = "PDF: abstract + introduction + conclusion + captions"
+    else:
+        content_source = "abstract only — no PDF available"
 
     # --- Topic context ---
     topic_name = topic.get("name") or ""
@@ -246,8 +231,11 @@ async def synthesize_paper(
                 + "\n"
             )
 
+    # Escape any literal braces in skill/notes so str.format() doesn't choke on them
+    safe_skill = skim_skill_md.replace("{", "{{").replace("}", "}}")
+    safe_notes = notes_section.replace("{", "{{").replace("}", "}}")
     prompt = _PROMPT_WRAPPER.format(
-        skim_skill_md=skim_skill_md,
+        skim_skill_md=safe_skill,
         title=title,
         authors=authors_str,
         year=year or "n.d.",
@@ -257,29 +245,49 @@ async def synthesize_paper(
         topic_name=topic_name,
         problems=problems_str,
         keywords=kw_str,
-        notes_section=notes_section,
+        notes_section=safe_notes,
     )
 
-    raw, api_error = await call_haiku(prompt, max_tokens=1024)
-    if api_error:
-        return {}, api_error
-    if not raw:
-        return {}, "Haiku returned an empty response — the paper may have no abstract or the prompt was too long"
+    from poneglyph.config import settings as _settings
+    client = get_client()
+    if client is None:
+        return {}, "ANTHROPIC_API_KEY is not configured — add it to your .env file"
+
+    user_content: list = []
+    if use_native_pdf:
+        pdf_bytes = Path(pdf_path).read_bytes()
+        pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
+        user_content.append({
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_b64},
+        })
+        is_pdf = True
+    user_content.append({"type": "text", "text": prompt})
 
     try:
-        clean = re.sub(r"```(?:json)?|```", "", raw).strip()
-        # Extract only the {...} span so trailing model commentary doesn't break parsing
-        start = clean.find("{")
-        end = clean.rfind("}")
-        if start == -1 or end == -1 or end <= start:
-            raise json.JSONDecodeError("no JSON object found", clean, 0)
-        data = json.loads(clean[start : end + 1])
-    except json.JSONDecodeError as exc:
-        logger.warning("synthesize_paper JSON parse failed: %s — raw: %.300s", exc, raw)
-        return {}, f"Model output was not valid JSON (parse error: {exc}) — try regenerating"
+        message = await client.messages.create(
+            model=_settings.haiku_model,
+            max_tokens=2048,
+            tools=[_SKIM_TOOL],
+            tool_choice={"type": "tool", "name": "record_skim"},
+            messages=[{"role": "user", "content": user_content}],
+        )
+        logger.info(
+            "synthesize_paper: input_tokens=%d output_tokens=%d pdf=%s",
+            message.usage.input_tokens,
+            message.usage.output_tokens,
+            is_pdf,
+        )
+    except Exception as exc:
+        logger.warning("synthesize_paper API call failed: %s", exc)
+        return {}, f"API call failed: {exc}"
 
-    if not isinstance(data, dict):
-        return {}, "Model returned an unexpected response format — try regenerating"
+    tool_block = next((b for b in message.content if b.type == "tool_use"), None)
+    if tool_block is None:
+        logger.warning("synthesize_paper: no tool_use block in response")
+        return {}, "Model did not return structured output — try regenerating"
+
+    data: dict = tool_block.input if isinstance(tool_block.input, dict) else {}
 
     rec = data.get("recommendation", "skip")
     if rec not in _VALID_RECS:

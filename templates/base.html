@@ -12,6 +12,16 @@
             --pico-font-size: 15px;
         }
         nav { margin-bottom: 1rem; }
+        .nav-search {
+            width: 110px;
+            margin: 0;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.82rem;
+            height: auto;
+            border-radius: 0.25rem;
+            transition: width 0.25s ease;
+        }
+        .nav-search:focus { width: 260px; }
         .badge {
             display: inline-block;
             padding: 0.15rem 0.5rem;
@@ -222,8 +232,14 @@
         <ul>
             <li><a href="/"><strong>Dashboard</strong></a></li>
         </ul>
-        <ul>
-            <li><a href="/search">Search</a></li>
+        <ul style="align-items:center;">
+            <li>
+                <form method="get" action="/search" style="margin:0; display:flex; align-items:center;">
+                    <input type="hidden" name="mode" value="both">
+                    <input type="search" name="q" placeholder="Search papers…" class="nav-search"
+                           aria-label="Search papers">
+                </form>
+            </li>
             <li><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button></li>
         </ul>
     </nav>

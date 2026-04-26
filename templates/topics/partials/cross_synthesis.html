@@ -1,0 +1,37 @@
+{% if synthesis %}
+<details {% if open %}open{% endif %}>
+    <summary style="cursor:pointer; font-weight:600; list-style:none; display:flex; align-items:center; gap:0.5rem; user-select:none;">
+        <span>&#9654;</span>
+        <span>Latest Cross-Paper Synthesis</span>
+        <span style="font-size:0.78rem; font-weight:normal; color:var(--pico-muted-color); margin-left:0.25rem;">
+            {{ synthesis.created_at | nyc }} ET &middot; {{ synthesis.model_used }}
+            &middot; {{ (synthesis.paper_ids or []) | length }} paper(s)
+        </span>
+    </summary>
+
+    <div style="margin-top:1rem;">
+        <div class="prose">
+            {{ synthesis.synthesis | md }}
+        </div>
+
+        {% if synthesis.research_directions %}
+        <div style="margin-top:1.25rem;">
+            <strong>Research Directions</strong>
+            <ol style="margin-top:0.5rem;">
+                {% for d in synthesis.research_directions %}
+                <li>{{ d }}</li>
+                {% endfor %}
+            </ol>
+        </div>
+        {% endif %}
+    </div>
+</details>
+
+<style>
+details[open] > summary span:first-child { transform: rotate(90deg); display:inline-block; }
+</style>
+{% else %}
+<p style="color:var(--pico-muted-color); font-style:italic; font-size:0.9rem;">
+    No cross-paper synthesis yet. Click <strong>Synthesize Topic</strong> to generate one.
+</p>
+{% endif %}

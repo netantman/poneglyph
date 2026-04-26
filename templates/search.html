@@ -1,27 +1,102 @@
 {% extends "base.html" %}
 {% block title %}Search — Poneglyph{% endblock %}
 {% block content %}
+
+<div id="qa-modal-container"></div>
+
 <h2>Search Papers</h2>
 
-<form method="get" action="/search" style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.5rem;">
-    <div style="flex:1; min-width:200px;">
-        <input type="search" name="q" value="{{ q }}" placeholder="Search papers…" autofocus style="margin:0;">
-    </div>
-    <div>
-        <select name="mode" style="margin:0; width:auto;">
-            <option value="keyword" {% if mode == 'keyword' %}selected{% endif %}>Keyword</option>
-            <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>Semantic</option>
-            <option value="both" {% if mode == 'both' %}selected{% endif %}>Both</option>
-        </select>
-    </div>
-    <button type="submit" style="margin:0;">Search</button>
-</form>
+<article style="margin-bottom:1.5rem;">
+    <header><strong>Ask about papers</strong></header>
+    <form hx-post="/search/ask"
+          hx-target="#qa-answer-area"
+          hx-swap="innerHTML"
+          hx-indicator="#qa-ind"
+          style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:0;">
+        <div style="flex:1; min-width:240px;">
+            <input type="text" name="question" placeholder="e.g. Which papers cover momentum strategies in international markets?" style="margin:0;">
+        </div>
+        <button type="submit" style="margin:0; width:auto;">
+            Ask
+            <span id="qa-ind" class="htmx-indicator"><span class="spinner"></span></span>
+        </button>
+    </form>
+    <div id="qa-answer-area" style="margin-top:0.75rem;"></div>
+</article>
+
+{% if qa_history %}
+{% set visible = qa_history[:15] %}
+{% set older   = qa_history[15:] %}
+<section style="margin-bottom:1.5rem;">
+    <h5 style="margin-bottom:0.5rem; color:var(--pico-muted-color);">Recently Asked</h5>
+    <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.3rem;">
+    {% for item in visible %}
+        <li style="display:flex; align-items:baseline; gap:0.4rem;">
+            <a href="#"
+               hx-get="/search/qa/{{ item.id }}"
+               hx-target="#qa-modal-container"
+               hx-swap="innerHTML"
+               style="font-size:0.88rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+               title="{{ item.question }}">
+                {{ item.question }}
+            </a>
+            <span style="font-size:0.76rem; color:var(--pico-muted-color); white-space:nowrap; flex-shrink:0;">
+                {{ item.created_at | nyc }}
+            </span>
+            <button hx-delete="/search/qa/{{ item.id }}"
+                    hx-target="closest li"
+                    hx-swap="outerHTML"
+                    style="margin:0; padding:0 0.3rem; font-size:0.75rem; width:auto;
+                           line-height:1.4; background:none; border:none;
+                           color:var(--pico-muted-color); cursor:pointer; flex-shrink:0;"
+                    title="Remove">×</button>
+        </li>
+    {% endfor %}
+    </ul>
+
+    {% if older %}
+    <ul id="qa-older" style="list-style:none; padding:0; margin:0.3rem 0 0;
+                              flex-direction:column; gap:0.3rem; display:none;">
+    {% for item in older %}
+        <li style="display:flex; align-items:baseline; gap:0.4rem;">
+            <a href="#"
+               hx-get="/search/qa/{{ item.id }}"
+               hx-target="#qa-modal-container"
+               hx-swap="innerHTML"
+               style="font-size:0.88rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+               title="{{ item.question }}">
+                {{ item.question }}
+            </a>
+            <span style="font-size:0.76rem; color:var(--pico-muted-color); white-space:nowrap; flex-shrink:0;">
+                {{ item.created_at | nyc }}
+            </span>
+            <button hx-delete="/search/qa/{{ item.id }}"
+                    hx-target="closest li"
+                    hx-swap="outerHTML"
+                    style="margin:0; padding:0 0.3rem; font-size:0.75rem; width:auto;
+                           line-height:1.4; background:none; border:none;
+                           color:var(--pico-muted-color); cursor:pointer; flex-shrink:0;"
+                    title="Remove">×</button>
+        </li>
+    {% endfor %}
+    </ul>
+    <button id="qa-show-more"
+            onclick="document.getElementById('qa-older').style.display='flex';
+                     document.getElementById('qa-older').style.flexDirection='column';
+                     this.style.display='none';"
+            style="margin-top:0.4rem; padding:0; background:none; border:none;
+                   color:var(--pico-primary); font-size:0.82rem; cursor:pointer;">
+        Show {{ older | length }} more…
+    </button>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if q %}
 
 {% if error %}
 <p style="color:var(--pico-del-color);">{{ error }}</p>
 {% endif %}
-
-{% if q %}
 
 {% if mode in ('keyword', 'both') %}
 <h4>Keyword Results <small style="font-weight:normal;color:var(--pico-muted-color);">({{ keyword_results|length }})</small></h4>

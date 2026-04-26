@@ -33,17 +33,23 @@ Deep synthesis **never auto-fires**. It is always user-triggered from a **"Gener
 
 ### Deep Synthesis UI on paper detail
 - [x] **Per-topic tabbed Deep Synthesis section** below Structural Skim — same tab layout as Structural Skim (one tab per linked topic; no tab bar if only one topic); tab switching via `GET /papers/{id}/deep-synthesis?topic_id=`
-- [x] Each tab shows rendered deep synthesis (Markdown → HTML via `markdown` lib + `md` Jinja filter) or empty state with Generate button
+- [x] When synthesis exists: **"View Deep Synthesis ↗"** clickable link opens a modal overlay with the rendered Markdown (via `data-md` attribute + client-side `marked.js`); "⟳ Skill updated" badge shown inline on the link when stale
+- [x] Empty state: Generate button (disabled with tooltip when no skill)
 - [x] Generate button triggers `POST /papers/{id}/deep-synthesis`; spinner while running; swaps tab panel on completion
-- [x] Footer: last run timestamp, model used; "⟳ Skill updated since last run" badge when `deep_skill_hash` mismatches current skill hash
-- [ ] View skill modal in footer (shows the exact prompt used)
-- [ ] Model toggle on Generate button (Sonnet / Opus) with cost hint
+- [x] Footer: last run timestamp, model used; View skill modal (shows exact prompt used)
+- [x] Model toggle on Generate/Regenerate button — inline `<select>` (Sonnet / Opus $$) with cost hint in tooltip; selection passed as `model_choice` to the POST route; model ID recorded in `deep_synthesis_model_used`
 
 ### Q&A
-- "Ask about papers" input on the search page
-- Backed by vector similarity search over paper embeddings (Phase 3) + FTS5
-- Top-N matching papers' structural skim + human notes fed into a Sonnet call that answers with citations
-- Answers include inline paper citation hyperlinks (Markdown links → paper detail pages)
+- [x] "Ask about papers" input on the search page (HTMX form, answer swapped into `#qa-answer-area`)
+- [x] Backed by vector similarity search over paper embeddings (Phase 3) + FTS5; results merged and deduped
+- [x] Top-N matching papers' structural skim + all available deep syntheses (across all topics) + human notes fed into a Sonnet call (`services/llm_qa.py`)
+- [x] Answers include inline paper citation hyperlinks (Markdown links → paper detail pages), rendered via `marked.js` in a styled card using the `skill-md` + `data-md` pattern (same as deep synthesis / structural skim) — no raw Markdown shown
+- [x] Q&A history saved to `qa_history` table (question, answer_md, created_at); "Recently Asked" section below the Q&A bar lists past questions as HTMX links that reload the stored answer without re-running the LLM
+- [x] Recently Asked UX: shows last 15 by default; older items collapsed behind a "Show N more" JS toggle; each item has an × delete button (HTMX DELETE, removes row from DB and `<li>` from DOM); clicking a history link opens the answer in a fixed modal overlay with an × to close/dismiss
+
+### Navigation
+- [x] Search added as a third block on the dashboard grid alongside Topics and Papers, linking to `/search`
+- [x] Keyword/semantic paper search removed from the Search page; replaced by a compact expanding search bar in the global nav (top-right). Defaults to `mode=both`. On focus the input expands via CSS transition. Submitting navigates to `/search?q=...&mode=both` where results are shown below the Q&A section.
 
 ### Cross-Paper Synthesis
 - `services/llm_cross.py`: cross-paper synthesis service

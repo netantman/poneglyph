@@ -14,8 +14,8 @@ from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict
 from poneglyph.services.arxiv_fetch import extract_arxiv_id, fetch_arxiv_metadata, is_arxiv_url
 from poneglyph.services.crossref_fetch import extract_doi, fetch_crossref_metadata, is_doi_url, search_by_title
 from poneglyph.services.pdf_manager import (
-    build_pdf_filename, copy_to_working_papers, get_pdf_base_dir, list_pdf_files,
-    list_subfolders, move_pdf, save_pdf,
+    build_pdf_filename, copy_to_working_papers, get_pdf_base_dir, list_all_pdf_files,
+    list_pdf_files, list_subfolders, move_pdf, save_pdf,
 )
 from poneglyph.services.llm_metadata import extract_metadata_from_pdf
 
@@ -135,24 +135,22 @@ async def upload_form(request: Request, topic_id: int | None = None):
     all_topics = [row_to_dict(r) for r in fetch_all("SELECT id, name FROM topics ORDER BY name")]
     preselected_ids = [topic_id] if topic_id else []
     subfolders = list_subfolders()
+    all_pdf_files = list_all_pdf_files()
     return templates.TemplateResponse(
         "papers/upload_form.html",
-        {"request": request, "all_topics": all_topics, "preselected_ids": preselected_ids, "subfolders": subfolders},
+        {
+            "request": request, "all_topics": all_topics,
+            "preselected_ids": preselected_ids, "subfolders": subfolders,
+            "all_pdf_files": all_pdf_files,
+        },
     )
 
 
-@router.get("/pdf/files", response_class=HTMLResponse)
-async def list_pdf_files_in_subfolder(pdf_existing_subfolder: str = ""):
-    """Return <option> elements for PDFs in the given subfolder (used by HTMX)."""
-    if not pdf_existing_subfolder.strip():
-        return HTMLResponse('<option value="">— Select a folder first —</option>')
-    files = list_pdf_files(pdf_existing_subfolder.strip())
-    if not files:
-        return HTMLResponse('<option value="">— No PDFs found —</option>')
-    options = '<option value="">— Select file —</option>'
-    for name in files:
-        options += f'<option value="{name}">{name}</option>'
-    return HTMLResponse(options)
+@router.get("/pdf/all-files", response_class=HTMLResponse)
+async def list_all_pdf_files_route():
+    """Return <option> elements for all PDFs recursively (used by HTMX datalist)."""
+    files = list_all_pdf_files()
+    return HTMLResponse("".join(f'<option value="{f}">' for f in files))
 
 
 @router.get("/search-by-title", response_class=HTMLResponse)
@@ -212,8 +210,7 @@ async def upload_paper(
     pdf_mode: str = Form("upload"),
     pdf_file: UploadFile | None = File(None),
     pdf_subfolder: str = Form(""),
-    pdf_existing_subfolder: str = Form(""),
-    pdf_existing_filename: str = Form(""),
+    pdf_existing_relpath: str = Form(""),
     pdf_tmp_id: str = Form(""),  # carry temp PDF across the LLM-failure re-render
 ):
     title = title.strip()
@@ -244,8 +241,8 @@ async def upload_paper(
         if cand.exists():
             pdf_tmp_path = cand
             pdf_content = cand.read_bytes()
-    elif pdf_mode == "link" and pdf_existing_subfolder.strip() and pdf_existing_filename.strip():
-        candidate = get_pdf_base_dir() / pdf_existing_subfolder.strip() / pdf_existing_filename.strip()
+    elif pdf_mode == "link" and pdf_existing_relpath.strip():
+        candidate = get_pdf_base_dir() / pdf_existing_relpath.strip()
         if candidate.exists():
             linked_pdf_path = candidate
 
@@ -340,6 +337,7 @@ async def upload_paper(
     if not title and pdf_tmp_path:
         all_topics = [row_to_dict(r) for r in fetch_all("SELECT id, name FROM topics ORDER BY name")]
         subfolders = list_subfolders()
+        all_pdf_files = list_all_pdf_files()
         return templates.TemplateResponse(
             "papers/upload_form.html",
             {
@@ -347,6 +345,7 @@ async def upload_paper(
                 "all_topics": all_topics,
                 "preselected_ids": topic_ids,
                 "subfolders": subfolders,
+                "all_pdf_files": all_pdf_files,
                 "pdf_tmp_id": pdf_tmp_id,
                 "pdf_subfolder_selected": pdf_subfolder.strip(),
                 "llm_message": (
@@ -439,8 +438,12 @@ async def upload_paper(
     if linked_count:
         msg += f" — linked to {linked_count} topic{'s' if linked_count > 1 else ''}"
 
-    # Auto-skim: await one Haiku pass per newly-linked topic that has a skill set
+    # Score and auto-skim for each newly-linked topic
     if newly_linked_topic_ids:
+        paper_row = row_to_dict(fetch_one("SELECT * FROM papers WHERE id = ?", (paper_id,)))
+        if paper_row:
+            from poneglyph.services.relevance import update_paper_all_topic_scores
+            update_paper_all_topic_scores(paper_id, paper_row)
         from poneglyph.pipeline import _synthesize_paper
         for tid in newly_linked_topic_ids:
             topic_row = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (tid,)))
@@ -681,8 +684,13 @@ async def get_deep_synthesis_tab(request: Request, paper_id: int, topic_id: int)
 
 
 @router.post("/{paper_id}/deep-synthesis", response_class=HTMLResponse)
-async def generate_deep_synthesis(request: Request, paper_id: int, topic_id: int = Form(...)):
-    """Run Sonnet deep synthesis for a (paper, topic) pair; blocked if PDF unavailable."""
+async def generate_deep_synthesis(
+    request: Request,
+    paper_id: int,
+    topic_id: int = Form(...),
+    model_choice: str = Form("sonnet"),
+):
+    """Run deep synthesis for a (paper, topic) pair; blocked if PDF unavailable."""
     import hashlib
     from poneglyph.services.llm_deep import deep_synthesize, extract_pdf_text
     from poneglyph.pipeline import _ensure_topic_paper_note, _skill_hash
@@ -698,6 +706,9 @@ async def generate_deep_synthesis(request: Request, paper_id: int, topic_id: int
     if not topic.get("deep_synthesis_skill_md"):
         return _deep_error("Upload a Deep Synthesis skill for this topic first.")
 
+    # --- Resolve model ---
+    model_id = settings.opus_model if model_choice == "opus" else settings.sonnet_model
+
     # --- PDF gates ---
     pdf_path = (paper.get("pdf_local_path") or "").strip()
     if not pdf_path:
@@ -707,8 +718,13 @@ async def generate_deep_synthesis(request: Request, paper_id: int, topic_id: int
         return _deep_error("PDF is a remote URL — please download and link a local copy first.")
 
     pdf_text, pdf_err = extract_pdf_text(pdf_path)
+    pdf_bytes: bytes | None = None
     if pdf_err:
-        return _deep_error(f"Cannot read PDF: {pdf_err}")
+        # Scanned or encrypted PDF — fall back to native Anthropic document API
+        try:
+            pdf_bytes = Path(pdf_path).read_bytes()
+        except OSError as exc:
+            return _deep_error(f"Cannot read PDF: {exc}")
 
     # --- Gather context notes ---
     note_rows = fetch_all(
@@ -723,7 +739,9 @@ async def generate_deep_synthesis(request: Request, paper_id: int, topic_id: int
 
     # --- Run synthesis ---
     try:
-        synthesis = await deep_synthesize(paper, topic, pdf_text, related_notes)
+        synthesis = await deep_synthesize(
+            paper, topic, pdf_text, related_notes, model=model_id, pdf_bytes=pdf_bytes
+        )
     except ValueError as exc:
         return _deep_error(str(exc))
 
@@ -735,7 +753,7 @@ async def generate_deep_synthesis(request: Request, paper_id: int, topic_id: int
            SET deep_synthesis = ?, deep_synthesis_model_used = ?,
                deep_skill_hash = ?, deep_generated_at = datetime('now')
            WHERE topic_id = ? AND paper_id = ?""",
-        (synthesis, settings.sonnet_model, skill_hash, topic_id, paper_id),
+        (synthesis, model_id, skill_hash, topic_id, paper_id),
     )
 
     skill_md = topic.get("deep_synthesis_skill_md") or ""
@@ -749,7 +767,7 @@ async def generate_deep_synthesis(request: Request, paper_id: int, topic_id: int
             "topic_has_deep_skill": bool(skill_md),
             "deep_skill_md": skill_md,
         },
-        headers=_toast_headers("Deep synthesis complete"),
+        headers=_toast_headers(f"Deep synthesis complete ({model_id})"),
     )
 
 
@@ -827,6 +845,7 @@ async def pdf_manage_form(request: Request, paper_id: int):
         return HTMLResponse("<p>Paper not found.</p>", status_code=404)
 
     subfolders = list_subfolders()
+    all_pdf_files = list_all_pdf_files()
     # Determine current subfolder from pdf_local_path
     current_subfolder = ""
     if paper.get("pdf_local_path"):
@@ -843,6 +862,7 @@ async def pdf_manage_form(request: Request, paper_id: int):
             "request": request,
             "paper": paper,
             "subfolders": subfolders,
+            "all_pdf_files": all_pdf_files,
             "current_subfolder": current_subfolder,
         },
     )
@@ -856,8 +876,7 @@ async def pdf_manage_submit(
     subfolder: str = Form(""),
     pdf_file: UploadFile | None = File(None),
     extract_metadata: str = Form(""),
-    pdf_existing_subfolder: str = Form(""),
-    pdf_existing_filename: str = Form(""),
+    pdf_existing_relpath: str = Form(""),
 ):
     """Handle PDF upload, subfolder move, or link to existing file."""
     paper = _get_paper(paper_id)
@@ -866,18 +885,19 @@ async def pdf_manage_submit(
 
     # --- Link existing file mode ---
     if pdf_mode == "link":
-        if not pdf_existing_subfolder.strip() or not pdf_existing_filename.strip():
+        if not pdf_existing_relpath.strip():
             resp = HTMLResponse("")
-            resp.headers.update(_toast_headers("Please select a folder and file", "error"))
+            resp.headers.update(_toast_headers("Please select a file", "error"))
             return resp
-        linked = get_pdf_base_dir() / pdf_existing_subfolder.strip() / pdf_existing_filename.strip()
+        linked = get_pdf_base_dir() / pdf_existing_relpath.strip()
         if not linked.exists():
             resp = HTMLResponse("")
             resp.headers.update(_toast_headers("File not found on disk", "error"))
             return resp
         execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(linked), paper_id))
+        display_name = Path(pdf_existing_relpath.strip()).name
         resp = HTMLResponse("<script>setTimeout(()=>window.location.reload(),1500)</script>")
-        resp.headers.update(_toast_headers(f"Linked to {pdf_existing_filename.strip()}"))
+        resp.headers.update(_toast_headers(f"Linked to {display_name}"))
         return resp
 
     # --- Upload / move mode ---
@@ -1086,6 +1106,9 @@ async def add_to_topic(request: Request, paper_id: int, topic_id: int = Form(...
 
     topic_row = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
     topic_name = topic_row["name"] if topic_row else "topic"
+
+    from poneglyph.services.relevance import update_paper_all_topic_scores
+    update_paper_all_topic_scores(paper_id, paper)
 
     if topic_row and topic_row.get("skim_skill_md"):
         from poneglyph.pipeline import _synthesize_paper

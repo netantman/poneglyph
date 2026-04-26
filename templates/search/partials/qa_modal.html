@@ -1,0 +1,18 @@
+<div style="position:fixed; inset:0; z-index:900; display:flex; align-items:center;
+            justify-content:center; background:rgba(0,0,0,0.55);"
+     onclick="if(event.target===this) document.getElementById('qa-modal-container').innerHTML=''">
+    <div style="background:var(--pico-card-background-color); border-radius:0.5rem;
+                padding:1.5rem; max-width:780px; width:92vw; max-height:85vh;
+                overflow-y:auto; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.45);"
+         onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;
+                    gap:1rem; margin-bottom:1rem; padding-bottom:0.75rem;
+                    border-bottom:1px solid var(--pico-card-border-color);">
+            <strong style="font-size:0.95rem; line-height:1.4;">{{ question }}</strong>
+            <button class="outline secondary"
+                    style="margin:0; padding:0.15rem 0.5rem; font-size:0.8rem; width:auto; flex-shrink:0;"
+                    onclick="document.getElementById('qa-modal-container').innerHTML=''">✕</button>
+        </div>
+        <div class="skill-md" data-md="{{ answer_md | e }}"></div>
+    </div>
+</div>

@@ -46,29 +46,15 @@
 
             <!-- Link existing mode -->
             <div id="pm-link-section" style="display: none;">
-                <div class="grid">
-                    <label>Folder
-                        <select name="pdf_existing_subfolder"
-                                hx-get="/papers/pdf/files"
-                                hx-target="#pm-files-list"
-                                hx-swap="innerHTML"
-                                hx-trigger="change"
-                                hx-include="this"
-                                onchange="document.getElementById('pm-file-input').value=''">
-                            <option value="">— Select folder —</option>
-                            {% for sf in subfolders %}
-                            <option value="{{ sf }}">{{ sf }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label>File
-                        <input type="text" name="pdf_existing_filename" id="pm-file-input"
-                               list="pm-files-list"
-                               placeholder="Select a folder, then type to search"
-                               autocomplete="off" style="margin: 0;">
-                        <datalist id="pm-files-list"></datalist>
-                    </label>
-                </div>
+                <label>File
+                    <input type="text" name="pdf_existing_relpath" id="pm-file-input"
+                           list="pm-all-files-list"
+                           placeholder="Type to search all PDFs…"
+                           autocomplete="off">
+                    <datalist id="pm-all-files-list">
+                        {% for f in all_pdf_files %}<option value="{{ f }}">{% endfor %}
+                    </datalist>
+                </label>
             </div>
 
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;">

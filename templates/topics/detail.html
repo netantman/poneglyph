@@ -65,6 +65,15 @@
     </button>
     {% endif %}
     <button class="outline"
+            hx-post="/topics/{{ topic.id }}/cross-synthesis"
+            hx-target="#cross-synthesis-status-area"
+            hx-swap="innerHTML"
+            hx-confirm="Run cross-paper synthesis for all papers in this topic? This calls Sonnet and may take 30–60 seconds."
+            hx-indicator="#cross-ind">
+        Synthesize Topic
+        <span id="cross-ind" class="htmx-indicator"><span class="spinner"></span></span>
+    </button>
+    <button class="outline"
             hx-post="/topics/{{ topic.id }}/recalculate-relevance"
             hx-target="#topic-papers-list"
             hx-swap="innerHTML"
@@ -80,6 +89,7 @@
     </button>
 </div>
 <div id="scout-status-area" style="margin-bottom: 0.5rem;"></div>
+<div id="cross-synthesis-status-area" style="margin-bottom: 0.5rem;"></div>
 
 <div id="topic-edit-area"></div>
 
@@ -165,5 +175,16 @@
         </article>
     </div>
 </div>
+
+<article style="margin-top:1.5rem;">
+    <header>
+        <strong>Cross-Paper Synthesis</strong>
+    </header>
+    <div id="cross-synthesis-result">
+        {% with synthesis=latest_synthesis %}
+            {% include "topics/partials/cross_synthesis.html" %}
+        {% endwith %}
+    </div>
+</article>
 
 {% endblock %}

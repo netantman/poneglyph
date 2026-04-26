@@ -14,7 +14,7 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from poneglyph.config import settings
-from poneglyph.services.llm import call_sonnet
+from poneglyph.services.llm import call_sonnet, call_sonnet_with_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +83,10 @@ Keywords: {keywords}
 async def deep_synthesize(
     paper: dict,
     topic: dict,
-    pdf_text: str,
+    pdf_text: str | None,
     related_notes: list[str] | None = None,
+    model: str | None = None,
+    pdf_bytes: bytes | None = None,
 ) -> str:
     """Run the topic's Deep Synthesis skill against the paper's full PDF via Sonnet.
 
@@ -131,8 +133,11 @@ async def deep_synthesize(
                 + "\n"
             )
 
+    # Escape literal braces in skill/notes so str.format() doesn't choke on them
+    safe_skill = skill.replace("{", "{{").replace("}", "}}")
+    safe_notes = notes_section.replace("{", "{{").replace("}", "}}")
     prompt = _PROMPT.format(
-        deep_skill_md=skill,
+        deep_skill_md=safe_skill,
         title=title,
         authors=authors_str,
         year=year or "n.d.",
@@ -141,11 +146,14 @@ async def deep_synthesize(
         topic_name=topic_name,
         problems=problems_str,
         keywords=kw_str,
-        notes_section=notes_section,
-        pdf_text=pdf_text,
+        notes_section=safe_notes,
+        pdf_text=pdf_text if pdf_text else "(see attached PDF document)",
     )
 
-    result = await call_sonnet(prompt, max_tokens=4096)
+    if pdf_bytes is not None:
+        result = await call_sonnet_with_pdf(prompt, pdf_bytes, max_tokens=4096, model=model)
+    else:
+        result = await call_sonnet(prompt, max_tokens=4096, model=model)
     if not result:
         raise ValueError("LLM returned empty response — check API key and model availability.")
     return result

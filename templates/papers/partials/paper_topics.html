@@ -13,7 +13,7 @@
                   title="{{ 'Remove from scout seeds for ' + t.name if t.is_scout_seed else 'Add to scout seeds for ' + t.name }}">🌱</span>
             <span hx-post="/topics/{{ t.id }}/papers/{{ paper_id }}/toggle-not-interesting"
                   hx-target="#tp-icons-{{ t.id }}-{{ paper_id }}" hx-swap="outerHTML"
-                  style="cursor:pointer; font-size:1.0rem;{% if not t.not_interesting %} opacity:0.2;{% endif %}"
+                  style="cursor:pointer; font-size:1.0rem;{% if t.not_interesting %} filter:drop-shadow(0 0 4px rgba(255,80,80,0.85));{% else %} opacity:0.2;{% endif %}"
                   title="{{ 'Mark as interesting for ' + t.name if t.not_interesting else 'Mark as not interesting for ' + t.name }}">🚫</span>
         </span>
     </div>

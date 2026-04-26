@@ -17,6 +17,7 @@ Phase 3 provides the **relevance scoring** that links the citation-graph retriev
 ## Manual relevance recalculation
 
 - [x] **Recalculate Relevance** button in the topic detail page actions bar — `POST /topics/{id}/recalculate-relevance`; calls `update_topic_relevance_scores`, returns the refreshed papers list partial (swaps `#topic-papers-list`) with a toast showing how many papers were updated
+- [x] Relevance score computed automatically whenever a paper is newly linked to a topic — both on manual upload (for each newly-linked topic) and via "Add to topic" on the paper detail page; uses `update_paper_all_topic_scores` so only the one paper is re-scored rather than the entire topic
 
 ## Paper sort order in topic detail page
 

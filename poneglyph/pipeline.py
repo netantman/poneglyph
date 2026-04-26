@@ -11,9 +11,6 @@ from poneglyph.services.semantic_scholar import get_paper as s2_get_paper
 
 logger = logging.getLogger(__name__)
 
-# Max papers to synthesize per run — keeps cost and duration predictable
-MAX_SYNTH_PER_RUN = 30
-
 
 def _skill_hash(skill_md: str | None) -> str:
     """Return SHA-256 hex digest of a skill prompt, or empty string if None."""
@@ -184,9 +181,8 @@ async def run_paper_enrichment(paper_id: int, topic_id: int, run_id: int) -> Non
         new_ids = await discover_from_paper(paper_id, topic_id)
         execute("UPDATE scout_runs SET papers_found = ? WHERE id = ?", (len(new_ids), run_id))
 
-        synth_ids = new_ids[:MAX_SYNTH_PER_RUN]
         synth_count = 0
-        for pid in synth_ids:
+        for pid in new_ids:
             err = await _synthesize_paper(pid, topic)
             if not err:
                 synth_count += 1
@@ -241,9 +237,8 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
                 (len(all_new), run_id),
             )
 
-        synth_ids = list(all_new)[:MAX_SYNTH_PER_RUN]
         synth_count = 0
-        for pid in synth_ids:
+        for pid in all_new:
             err = await _synthesize_paper(pid, topic)
             if not err:
                 synth_count += 1

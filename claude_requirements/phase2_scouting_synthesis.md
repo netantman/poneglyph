@@ -44,11 +44,11 @@ The Haiku structural skim **auto-fires for every paper entering the system**, on
   - Stores `paper_citations` and `topic_papers` rows; back-fills `semantic_scholar_id`
 
 ### Per-topic Structural Skim skill
-- [ ] Topic edit page gains a **Structural Skim skill** field — file upload (`.md`) and inline editor (textarea). **Required before scouting or structural skim can run.** Stored in `topics.skim_skill_md` (TEXT, nullable). No built-in default — each topic must supply its own skill.
-- [ ] Topic Detail page shows a small "Skim skill: ✓ Custom" / "✗ None" badge.
-- [ ] Scout Now + Generate Structural Skim actions are **disabled with a tooltip** ("Upload a Structural Skim skill first") when `skim_skill_md` is NULL.
-- [ ] If `skim_skill_md` is NULL when synthesis is attempted programmatically, log a warning and skip — do not use any fallback prompt.
-- [ ] Validation on upload: reject blank/whitespace; show preview before save.
+- [x] Topic edit page gains a **Structural Skim skill** field — file upload (`.md`) and inline editor (textarea). **Required before scouting or structural skim can run.** Stored in `topics.skim_skill_md` (TEXT, nullable). No built-in default — each topic must supply its own skill.
+- [x] Topic Detail page shows a small "Skim skill: ✓ Custom" / "✗ None" badge.
+- [x] Scout Now + Generate Structural Skim actions are **disabled with a tooltip** ("Upload a Structural Skim skill first") when `skim_skill_md` is NULL.
+- [x] If `skim_skill_md` is NULL when synthesis is attempted programmatically, log a warning and skip — do not use any fallback prompt.
+- [x] Validation on upload: reject blank/whitespace; show preview before save.
 
 ### Haiku structural skim
 - [x] `services/llm_bulk.py`: Haiku structured note generation
@@ -56,25 +56,25 @@ The Haiku structural skim **auto-fires for every paper entering the system**, on
   - HTML stripping via `_HTMLStripper` (drops `<img>`, `<figure>`, `<svg>`)
   - **If `topic.skim_skill_md` is None or empty → return `{}` immediately** (no fallback prompt)
   - **PDF-aware paper text extraction** (`extract_skim_sections`):
-    - If `paper.pdf_local_path` is set, is a local file, and pypdf can extract text → extract structured sections: abstract, introduction, conclusion, and figure/table captions. These are used as the paper text in the prompt.
+    - If `paper.pdf_local_path` is set, is a local file, and pypdf can extract text → extract **first 8 000 chars + last 4 000 chars** of the full PDF text, labelled `[Opening]` and `[Closing]`. This head+tail approach is robust to OCR artifacts and non-academic document structures (e.g. bank research reports) that do not follow standard Abstract/Introduction/Conclusion anatomy.
     - If no PDF or extraction fails → fall back to `paper.abstract` only. The prompt explicitly notes `[Source: abstract only]` so the skim fields can flag gaps accordingly.
     - Extraction caps at ~12 000 chars to keep Haiku token cost low.
 - [x] Prompt assembly uses the topic's `skim_skill_md` as the skill/task instructions, followed by: paper metadata + extracted paper text (PDF sections or abstract-only), topic name, problem statements, keywords, up to 5 recent human notes from other papers in the topic, and the fixed JSON output schema. The user's skill defines what to extract — the system only appends paper context and output format.
-- [ ] The structural skim extracts the following fields (the user's skill determines methodology; the output JSON schema is fixed):
+- [x] The structural skim extracts the following fields (the user's skill determines methodology; the output JSON schema is fixed):
   - `main_claim`, `data_source`, `strategy_type`, `headline_statistic`
   - `signal_mechanism`, `data_details`, `sample`, `universe`, `portfolio_construction`
   - `key_tables` (list), `key_metrics`
   - `skim_recommendation`: read | skip | deep_dive
-- [ ] Results stored **per (paper, topic)** in `topic_paper_notes`:
+- [x] Results stored **per (paper, topic)** in `topic_paper_notes`:
   - All skim fields, `skim_recommendation`, `skim_model_used`, `skim_skill_hash` (SHA-256 of the skill used), `skim_generated_at`
 - [x] Also stored in `topic_papers.recommendation` for list view (mirrors `skim_recommendation`)
-- [ ] Running skim for paper X against topic A does **not** touch topic B's row — each tab is independent.
+- [x] Running skim for paper X against topic A does **not** touch topic B's row — each tab is independent.
 
 ### Pipeline orchestration
 - [x] `pipeline.py`: wires discovery + synthesis
   - `run_paper_enrichment(paper_id, topic_id, run_id)` — single paper
   - `run_topic_scout(topic_id, run_id)` — seed papers only (`topic_papers.is_scout_seed = 1`)
-  - `MAX_SYNTH_PER_RUN = 30` — caps Haiku cost per run
+  - No cap on Haiku synthesis per run — all newly discovered papers are synthesized
   - Scout run lifecycle in `scout_runs` table (started_at, finished_at, status, error_message)
   - `_synthesize_paper`: fetches up to 5 most-recently-updated human notes from other topic
     papers as context for Haiku; excludes the paper being synthesized to avoid self-reference
@@ -83,10 +83,10 @@ The Haiku structural skim **auto-fires for every paper entering the system**, on
 
 ### UI integration
 - [x] "Scout Now" button on topic detail page — `POST /scout/topic/{id}`, starts background task, HTMX polls `/scout/run/{run_id}` every 3s; shows prominent styled message box "Scouting in progress" while running, success/error box when done
-- [ ] Scout Now is disabled when `skim_skill_md` is NULL (tooltip: "Upload a Structural Skim skill first")
+- [x] Scout Now is disabled when `skim_skill_md` is NULL (tooltip: "Upload a Structural Skim skill first")
 - [x] "Discover Citations" button on paper detail page — topic dropdown if multiple, direct POST if one
 - [x] "Generate Structural Skim" button on paper detail page — on-demand skim for the currently active topic tab (topic dropdown if multiple, direct POST if one)
-- [ ] **Per-topic tabbed Structural Skim section** on paper detail page:
+- [x] **Per-topic tabbed Structural Skim section** on paper detail page:
   - Tab bar appears only when paper is linked to ≥2 topics (single-topic papers render as before)
   - One tab per linked topic, ordered by `topic_papers.relevance_score DESC, topics.name`
   - Tab state preserved in URL (`?topic={topic_id}`); default is the highest-relevance topic
@@ -101,6 +101,23 @@ The Haiku structural skim **auto-fires for every paper entering the system**, on
 ### Semantic Scholar ID resolution for existing papers
 - [x] `discover_from_paper` resolves and back-fills `semantic_scholar_id` on first scout
 - [x] Retroactive bulk resolution for all existing papers — `resolve_missing_s2_ids()` in `pipeline.py`, called automatically at the start of every `run_topic_scout`
+
+### PDF reference extraction fallback (for seed papers not indexed by S2)
+Bank research reports and grey-literature PDFs are not in the Semantic Scholar graph. When a seed paper yields 0 references from S2 and has a local PDF with no prior citation data, fall back to Haiku-based reference extraction from the PDF text.
+
+- [x] `services/llm_refs.py`: `extract_references_from_pdf(pdf_path) → list[dict]`
+  - Extracts full PDF text (no character cap, via pypdf directly); locates the reference section by searching for the last "References" / "Bibliography" / "Works Cited" header, falling back to the last 30 000 chars if no header found
+  - Single Haiku call returns JSON array of `{title, authors, year, venue}`
+  - Returns `[]` on failure or when no reference list is found
+- [x] `semantic_scholar.search_paper(title, limit=3) → dict | None`
+  - Uses S2 `/paper/search?query=` endpoint to resolve a reference by title
+  - Returns top result or None
+- [x] Title similarity guard in `citation_scout.py`: normalized token-overlap ≥ 0.7 required before accepting an S2 match, preventing false positives on short/generic titles
+- [x] Fallback integrated into `discover_from_paper`:
+  - Condition: S2 returned 0 references **AND** no `paper_citations` rows with `direction='cites'` exist yet for this paper (idempotency guard) **AND** paper has `pdf_local_path` set
+  - For each extracted reference: search S2 by title → similarity check → keyword filter → upsert paper → link to topic → record `paper_citations` row (direction=`cites`)
+  - Discovered papers flow into the same skim pipeline as S2-sourced papers
+  - Logged distinctly: `"pdf_refs fallback: paper={id} extracted={n} resolved={m} new={k}"`
 
 ## Details
 
@@ -120,6 +137,9 @@ Topic Scout Now / scheduled job
       → Resolve Semantic Scholar ID
       → GET /paper/{id}/citations  → papers that cite it
       → GET /paper/{id}/references → papers it cites
+      → [Fallback if S2 references = 0 AND no prior paper_citations AND pdf_local_path set]:
+          → extract_pdf_text → last 20k chars → Haiku → structured reference list
+          → For each reference: S2 title search → similarity ≥ 0.7 → treat as S2 paper
       → Filter: already in DB? keyword/problem-statement term match on title+abstract?
       → Store new papers (linked to topic; is_scout_seed = 0 by default)
       → Run Haiku Structural Skim on each (only if skim_skill_md is set):

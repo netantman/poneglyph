@@ -2,27 +2,45 @@
 {% set deep_stale = has_deep and current_skill_hash and ds.deep_skill_hash and ds.deep_skill_hash != current_skill_hash %}
 
 {% if has_deep %}
-<div class="ql-snow" style="font-size:0.9rem;">
-    <div class="ql-editor" style="padding:0; border:none;">
-        {{ ds.deep_synthesis | md | safe }}
+<details style="margin:0;">
+    <summary style="cursor:pointer; list-style:none; user-select:none;
+                    color:var(--pico-primary); font-size:0.9rem; display:inline-flex;
+                    align-items:center; gap:0.35rem;">
+        View Deep Synthesis ↗
+        {% if deep_stale %}
+        <span style="font-size:0.75rem; color:#f59e0b; font-weight:normal;">⟳ Skill updated</span>
+        {% endif %}
+    </summary>
+    <div style="position:fixed; inset:0; z-index:900; display:flex; align-items:center;
+                justify-content:center; background:rgba(0,0,0,0.55);"
+         onclick="if(event.target===this)this.closest('details').removeAttribute('open')">
+        <div style="background:var(--pico-card-background-color); border-radius:0.5rem;
+                    padding:1.5rem; max-width:780px; width:92vw; max-height:85vh;
+                    overflow-y:auto; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.45);"
+             onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center;
+                        margin-bottom:1rem;">
+                <strong style="font-size:0.95rem;">Deep Synthesis</strong>
+                <button class="outline secondary" style="margin:0; padding:0.15rem 0.5rem;
+                            font-size:0.8rem; width:auto;"
+                        onclick="this.closest('details').removeAttribute('open')">✕</button>
+            </div>
+            <div class="skill-md" data-md="{{ ds.deep_synthesis | e }}"></div>
+        </div>
     </div>
-</div>
+</details>
 
-<div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
-            font-size:0.8rem; color:var(--pico-muted-color);
-            border-top:1px solid var(--pico-card-border-color); padding-top:0.5rem;">
+<div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
+            font-size:0.8rem; color:var(--pico-muted-color);">
     {% if ds.deep_generated_at %}
     <span>Last run: {{ ds.deep_generated_at | nyc }}</span>
     {% endif %}
     {% if ds.deep_synthesis_model_used %}
     <span>· {{ ds.deep_synthesis_model_used }}</span>
     {% endif %}
-    {% if deep_stale %}
-    <span style="color:#f59e0b;">⟳ Skill updated since last run</span>
-    {% endif %}
     {% if deep_skill_md %}
     <details style="display:inline; margin:0;">
-        <summary style="display:inline; cursor:pointer; color:var(--pico-primary);
+        <summary style="display:inline; cursor:pointer; color:var(--pico-muted-color);
                         font-size:0.8rem; list-style:none; user-select:none;">
             View skill ↗
         </summary>
@@ -31,11 +49,12 @@
              onclick="if(event.target===this)this.closest('details').removeAttribute('open')">
             <div style="background:var(--pico-card-background-color); border-radius:0.5rem;
                         padding:1.5rem; max-width:680px; width:90vw; max-height:80vh;
-                        overflow-y:auto; position:relative;">
+                        overflow-y:auto; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.45);"
+                 onclick="event.stopPropagation()">
                 <div style="display:flex; justify-content:space-between; align-items:center;
                             margin-bottom:0.75rem;">
                     <strong style="font-size:0.9rem;">Deep Synthesis Skill</strong>
-                    <button class="outline" style="margin:0; padding:0.15rem 0.5rem;
+                    <button class="outline secondary" style="margin:0; padding:0.15rem 0.5rem;
                                 font-size:0.8rem; width:auto;"
                             onclick="this.closest('details').removeAttribute('open')">✕</button>
                 </div>
@@ -46,17 +65,24 @@
     {% endif %}
     {% if topic_id and paper_id %}
     {% if topic_has_deep_skill %}
-    <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
-            hx-post="/papers/{{ paper_id }}/deep-synthesis"
-            hx-vals='{"topic_id": "{{ topic_id }}"}'
-            hx-target="#deep-tab-panel"
-            hx-swap="innerHTML"
-            hx-indicator="#deep-ind-{{ topic_id }}">
-        Regenerate
-        <span id="deep-ind-{{ topic_id }}" class="htmx-indicator">
-            <span class="spinner" style="width:0.7em;height:0.7em;vertical-align:middle;display:inline-block;"></span>
-        </span>
-    </button>
+    <span style="display:inline-flex; align-items:center; gap:0.25rem;">
+        <select id="deep-model-{{ topic_id }}" style="margin:0; padding:0.15rem 0.3rem; font-size:0.78rem; width:auto; height:auto;"
+                title="Sonnet: faster, cheaper (~$0.003/1k tokens) · Opus: more thorough (~$0.015/1k tokens)">
+            <option value="sonnet">Sonnet</option>
+            <option value="opus">Opus $$</option>
+        </select>
+        <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
+                hx-post="/papers/{{ paper_id }}/deep-synthesis"
+                hx-vals="js:{topic_id:'{{ topic_id }}', model_choice: document.getElementById('deep-model-{{ topic_id }}').value}"
+                hx-target="#deep-tab-panel"
+                hx-swap="innerHTML"
+                hx-indicator="#deep-ind-{{ topic_id }}">
+            Regenerate
+            <span id="deep-ind-{{ topic_id }}" class="htmx-indicator">
+                <span class="spinner" style="width:0.7em;height:0.7em;vertical-align:middle;display:inline-block;"></span>
+            </span>
+        </button>
+    </span>
     {% else %}
     <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
             disabled title="Upload a Deep Synthesis skill for this topic first">
@@ -71,17 +97,24 @@
     No deep synthesis yet.
     {% if topic_id and paper_id %}
     {% if topic_has_deep_skill %}
-    <button class="outline" style="margin:0 0 0 0.5rem; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
-            hx-post="/papers/{{ paper_id }}/deep-synthesis"
-            hx-vals='{"topic_id": "{{ topic_id }}"}'
-            hx-target="#deep-tab-panel"
-            hx-swap="innerHTML"
-            hx-indicator="#deep-ind-{{ topic_id }}">
-        Generate Deep Synthesis
-        <span id="deep-ind-{{ topic_id }}" class="htmx-indicator">
-            <span class="spinner" style="width:0.7em;height:0.7em;vertical-align:middle;display:inline-block;"></span>
-        </span>
-    </button>
+    <span style="display:inline-flex; align-items:center; gap:0.25rem; margin-left:0.5rem;">
+        <select id="deep-model-gen-{{ topic_id }}" style="margin:0; padding:0.15rem 0.3rem; font-size:0.78rem; width:auto; height:auto;"
+                title="Sonnet: faster, cheaper (~$0.003/1k tokens) · Opus: more thorough (~$0.015/1k tokens)">
+            <option value="sonnet">Sonnet</option>
+            <option value="opus">Opus $$</option>
+        </select>
+        <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
+                hx-post="/papers/{{ paper_id }}/deep-synthesis"
+                hx-vals="js:{topic_id:'{{ topic_id }}', model_choice: document.getElementById('deep-model-gen-{{ topic_id }}').value}"
+                hx-target="#deep-tab-panel"
+                hx-swap="innerHTML"
+                hx-indicator="#deep-ind-gen-{{ topic_id }}">
+            Generate Deep Synthesis
+            <span id="deep-ind-gen-{{ topic_id }}" class="htmx-indicator">
+                <span class="spinner" style="width:0.7em;height:0.7em;vertical-align:middle;display:inline-block;"></span>
+            </span>
+        </button>
+    </span>
     {% else %}
     <button class="outline" style="margin:0 0 0 0.5rem; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
             disabled title="Upload a Deep Synthesis skill for this topic first">

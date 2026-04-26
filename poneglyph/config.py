@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Model identifiers — override in .env when Anthropic releases new versions
     haiku_model: str = "claude-haiku-4-5-20251001"
     sonnet_model: str = "claude-sonnet-4-6"
+    opus_model: str = "claude-opus-4-7"
 
     # Server
     host: str = "127.0.0.1"

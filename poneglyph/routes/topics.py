@@ -1,9 +1,13 @@
 """Topic CRUD routes – full-page views + htmx partial responses."""
 
+import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
+
+logger = logging.getLogger(__name__)
 
 # Toast helper: returns HX-Trigger header for showToast event
 def _toast_headers(message: str, toast_type: str = "success") -> dict:
@@ -116,9 +120,20 @@ async def view_topic(request: Request, topic_id: int):
     papers = [row_to_dict(r) for r in paper_rows]
     seed_count = sum(1 for p in papers if p.get("is_scout_seed"))
 
+    latest_synthesis = row_to_dict(fetch_one(
+        "SELECT * FROM cross_syntheses WHERE topic_id = ? ORDER BY created_at DESC LIMIT 1",
+        (topic_id,),
+    ))
+
     return templates.TemplateResponse(
         "topics/detail.html",
-        {"request": request, "topic": topic, "papers": papers, "seed_count": seed_count},
+        {
+            "request": request,
+            "topic": topic,
+            "papers": papers,
+            "seed_count": seed_count,
+            "latest_synthesis": latest_synthesis,
+        },
     )
 
 
@@ -408,6 +423,150 @@ async def recalculate_relevance(request: Request, topic_id: int):
     )
     resp.headers.update(_toast_headers(f"Relevance scores updated for {updated} paper(s)"))
     return resp
+
+
+# ---------- steering log helper ----------
+
+# ---------- Cross-paper synthesis ----------
+
+def _cross_status_html(run_id: int, topic_id: int) -> str:
+    """Return HTMX-polling status HTML for a cross-synthesis run."""
+    from poneglyph.db import fetch_one, row_to_dict
+    run = row_to_dict(fetch_one("SELECT * FROM scout_runs WHERE id = ?", (run_id,)))
+    if not run:
+        return f'<div id="cross-status-{run_id}"><small>Run not found.</small></div>'
+
+    status = run.get("status", "ok")
+    error = run.get("error_message") or ""
+
+    _box = (
+        "background:var(--pico-card-sectioning-background-color);"
+        "border-radius:0.4rem;padding:0.65rem 0.85rem;"
+        "margin-top:0.75rem;font-size:0.9rem;"
+    )
+
+    if run.get("finished_at"):
+        if status == "error":
+            border = "border:1px solid var(--pico-del-color);"
+            body = f"&#10007;&nbsp; Synthesis failed: {error}"
+        else:
+            border = "border:1px solid var(--pico-ins-color);"
+            body = (
+                "&#10003;&nbsp; Cross-paper synthesis complete. "
+                f'<a href="" onclick="location.reload();return false;" '
+                f'style="font-size:0.85rem;">Reload to view</a>'
+            )
+        return (
+            f'<div id="cross-status-{run_id}" style="{_box}{border}">'
+            f"{body}</div>"
+        )
+    else:
+        border = "border:1px solid var(--pico-primary-border);"
+        return (
+            f'<div id="cross-status-{run_id}" style="{_box}{border}"'
+            f'     hx-get="/topics/{topic_id}/cross-synthesis/status/{run_id}"'
+            f"     hx-trigger=\"every 3s\""
+            f'     hx-swap="outerHTML">'
+            f'  <span class="spinner" style="width:0.85em;height:0.85em;'
+            f'vertical-align:middle;display:inline-block;margin-right:0.4rem;"></span>'
+            f"  <strong>Synthesizing…</strong> this may take 30–60 seconds."
+            f"</div>"
+        )
+
+
+async def _run_cross_synthesis(topic_id: int, run_id: int) -> None:
+    """Background task: run cross-paper synthesis and persist the result."""
+    from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict
+    from poneglyph.pipeline import _finish_run
+    from poneglyph.services.llm_cross import cross_synthesize
+
+    try:
+        topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+        if not topic:
+            _finish_run(run_id, found=0, new=0, status="error", error="Topic not found")
+            return
+
+        # Fetch papers + their best skim + human notes
+        paper_rows = fetch_all(
+            """SELECT p.*, pn.human_note
+               FROM papers p
+               JOIN topic_papers tp ON p.id = tp.paper_id
+               LEFT JOIN paper_notes pn ON pn.paper_id = p.id
+               WHERE tp.topic_id = ?
+               ORDER BY COALESCE(tp.relevance_score, 0.0) DESC""",
+            (topic_id,),
+        )
+
+        paper_notes: list[dict] = []
+        paper_ids: list[int] = []
+        for row in paper_rows:
+            p = row_to_dict(row)
+            pid = p["id"]
+            paper_ids.append(pid)
+
+            skim_rows = fetch_all(
+                """SELECT * FROM topic_paper_notes
+                   WHERE topic_id = ? AND paper_id = ?
+                   LIMIT 1""",
+                (topic_id, pid),
+            )
+            skim = row_to_dict(skim_rows[0]) if skim_rows else None
+
+            paper_notes.append({
+                "paper": p,
+                "skim": skim,
+                "human_note": p.get("human_note"),
+            })
+
+        synthesis, directions = await cross_synthesize(topic, paper_notes)
+
+        from poneglyph.config import settings
+        execute(
+            """INSERT INTO cross_syntheses
+               (topic_id, paper_ids, synthesis, research_directions, model_used)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                topic_id,
+                json.dumps(paper_ids),
+                synthesis,
+                json.dumps(directions),
+                settings.sonnet_model,
+            ),
+        )
+        _finish_run(run_id, found=len(paper_ids), new=1)
+
+    except Exception as exc:
+        logger.exception("cross_synthesis run %d failed: %s", run_id, exc)
+        from poneglyph.pipeline import _finish_run
+        _finish_run(run_id, found=0, new=0, status="error", error=str(exc)[:500])
+
+
+@router.post("/{topic_id}/cross-synthesis", response_class=HTMLResponse)
+async def start_cross_synthesis(request: Request, topic_id: int):
+    """Start a cross-paper synthesis run; return HTMX polling status HTML."""
+    from poneglyph.pipeline import create_run
+
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse('<small style="color:var(--pico-del-color);">Topic not found.</small>')
+
+    paper_count = fetch_one(
+        "SELECT COUNT(*) as n FROM topic_papers WHERE topic_id = ?", (topic_id,)
+    )
+    if not paper_count or paper_count["n"] == 0:
+        return HTMLResponse(
+            '<small style="color:var(--pico-del-color);">No papers in topic — add papers first.</small>'
+        )
+
+    run_id = create_run(topic_id, "cross_synthesis")
+    asyncio.create_task(_run_cross_synthesis(topic_id, run_id))
+    return HTMLResponse(_cross_status_html(run_id, topic_id))
+
+
+@router.get("/{topic_id}/cross-synthesis/status/{run_id}", response_class=HTMLResponse)
+async def cross_synthesis_status(topic_id: int, run_id: int):
+    """Poll endpoint for cross-synthesis run status."""
+    return HTMLResponse(_cross_status_html(run_id, topic_id))
 
 
 # ---------- steering log helper ----------

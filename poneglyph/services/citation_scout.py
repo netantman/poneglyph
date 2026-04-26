@@ -2,11 +2,22 @@
 
 import json
 import logging
+import re
 
-from poneglyph.db import execute, fetch_one, row_to_dict
-from poneglyph.services.semantic_scholar import get_citations, get_paper, get_references
+from poneglyph.db import execute, fetch_one, fetch_all, row_to_dict
+from poneglyph.services.semantic_scholar import get_citations, get_paper, get_references, search_paper
 
 logger = logging.getLogger(__name__)
+
+
+def _title_similarity(a: str, b: str) -> float:
+    """Normalized token-overlap similarity between two titles (0.0–1.0)."""
+    def tokens(s: str) -> set[str]:
+        return set(re.sub(r"[^\w\s]", "", s.lower()).split())
+    ta, tb = tokens(a), tokens(b)
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / max(len(ta), len(tb))
 
 
 def _lookup_key(paper: dict) -> str | None:
@@ -212,8 +223,43 @@ async def discover_from_paper(
 
         _record_citation(paper_id, linked_paper_id, direction)
 
+    # PDF reference extraction fallback — for papers not in the S2 graph (e.g. bank research)
+    pdf_refs_extracted = 0
+    pdf_refs_resolved = 0
+    if not references and paper.get("pdf_local_path"):
+        has_prior_cites = fetch_one(
+            "SELECT id FROM paper_citations WHERE from_paper_id = ? AND direction = 'cites' LIMIT 1",
+            (paper_id,),
+        )
+        if not has_prior_cites:
+            from poneglyph.services.llm_refs import extract_references_from_pdf
+            extracted = await extract_references_from_pdf(paper["pdf_local_path"])
+            pdf_refs_extracted = len(extracted)
+            for ref in extracted:
+                if not ref.get("title"):
+                    continue
+                s2_match = await search_paper(ref["title"])
+                if not s2_match or not s2_match.get("title"):
+                    continue
+                if _title_similarity(ref["title"], s2_match["title"]) < 0.7:
+                    continue
+                search_text = f"{s2_match.get('title', '')} {s2_match.get('abstract', '')}"
+                if not _keyword_matches(search_text, keywords):
+                    continue
+                fields = _s2_to_db_fields(s2_match)
+                if not fields["title"]:
+                    continue
+                pdf_refs_resolved += 1
+                linked_paper_id, _ = _upsert_paper(fields)
+                newly_linked = _link_to_topic(linked_paper_id, topic_id)
+                if newly_linked:
+                    new_ids.append(linked_paper_id)
+                _record_citation(paper_id, linked_paper_id, "cites")
+
     logger.info(
-        "discover_from_paper: paper=%d topic=%d citations=%d refs=%d new=%d",
-        paper_id, topic_id, len(citations), len(references), len(new_ids),
+        "discover_from_paper: paper=%d topic=%d citations=%d refs=%d"
+        " pdf_refs_fallback(extracted=%d resolved=%d) new=%d",
+        paper_id, topic_id, len(citations), len(references),
+        pdf_refs_extracted, pdf_refs_resolved, len(new_ids),
     )
     return new_ids

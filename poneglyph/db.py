@@ -156,6 +156,14 @@ CREATE TABLE IF NOT EXISTS topic_embeddings (
     UNIQUE(topic_id, ps_index)
 );
 
+-- Q&A history: saved questions and generated answers
+CREATE TABLE IF NOT EXISTS qa_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    question    TEXT NOT NULL,
+    answer_md   TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- FTS5 virtual table for full-text keyword search across papers
 CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
     title,
@@ -331,6 +339,20 @@ def _migrate(conn: sqlite3.Connection) -> None:
             FROM paper_notes;
             DROP TABLE paper_notes;
             ALTER TABLE paper_notes_clean RENAME TO paper_notes;
+        """)
+
+    # Create qa_history table if missing (added in phase 4)
+    tables = {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    if "qa_history" not in tables:
+        conn.execute("""
+            CREATE TABLE qa_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                question    TEXT NOT NULL,
+                answer_md   TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
         """)
 
     conn.commit()

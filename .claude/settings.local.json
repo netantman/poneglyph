@@ -116,7 +116,14 @@
       "Bash(wc -l /c/Users/zhong/source/repos/poneglyph/poneglyph/services/*.py)",
       "Bash(find . -name \"*.html\" -exec grep -l \"View skill\\\\|skill.*modal\\\\|view.*skill\" {} \\\\;)",
       "Bash(sqlite3 data/poneglyph.db \"SELECT id, title, source, created_at FROM papers ORDER BY created_at DESC;\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(/c/Users/zhong/anaconda3/envs/poneglyph/python.exe -c ' *)",
+      "Bash(sqlite3 C:/Users/zhong/source/repos/poneglyph/data/poneglyph.db \".schema paper_citations\")",
+      "Bash(grep -E \"\\\\.\\(bat|sh|pyw|ps1\\)$\")",
+      "Bash(C:/Users/zhong/anaconda3/envs/poneglyph/python.exe -c ' *)",
+      "Bash(where python3.11)",
+      "Read(//usr/**)"
     ]
   }
 }
