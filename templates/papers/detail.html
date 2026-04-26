@@ -243,7 +243,7 @@
     {% endif %}
     <button class="outline contrast"
             hx-delete="/papers/{{ paper.id }}"
-            hx-confirm="Delete paper '{{ paper.title }}'? This cannot be undone."
+            hx-confirm="Delete paper '{{ paper.title }}'? This will also permanently delete: your human notes on this paper, structural skims and deep syntheses across every topic it belongs to, citation links, and embeddings. Recovery requires restoring last night's backup. Continue?"
             hx-on::after-request="if(event.detail.successful) window.location='/papers'">
         Delete
     </button>

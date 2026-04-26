@@ -1,10 +1,21 @@
 """SQLite database setup with schema, FTS5, and connection management."""
 
 import json
+import logging
+import shutil
 import sqlite3
+from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from poneglyph.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Bump this whenever a destructive migration is added. _migrate() compares against
+# PRAGMA user_version and only runs newer steps, so we don't re-execute migrations
+# on every boot.
+SCHEMA_VERSION = 1
 
 _SCHEMA_SQL = """
 -- Topics: user-defined research areas with keywords, steering, and LLM skill prompts
@@ -198,17 +209,91 @@ def _ensure_data_dir() -> None:
 
 
 def get_connection() -> sqlite3.Connection:
-    """Return a new SQLite connection with WAL mode and FK enforcement."""
+    """Return a new SQLite connection with WAL mode, FK enforcement, and durability PRAGMAs."""
     _ensure_data_dir()
     conn = sqlite3.connect(settings.database_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # synchronous=NORMAL is durable under WAL and faster than FULL.
+    conn.execute("PRAGMA synchronous=NORMAL")
+    # Auto-checkpoint every 1000 pages so the WAL doesn't grow unbounded.
+    conn.execute("PRAGMA wal_autocheckpoint=1000")
+    # Wait up to 5s if another writer (e.g. backup script) holds the lock.
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.row_factory = sqlite3.Row
     return conn
 
 
+@contextmanager
+def transaction():
+    """Context manager that yields a connection inside an explicit transaction.
+
+    Commits on clean exit, rolls back on any exception, and always closes.
+    Use this for any code path that runs more than one write — `_synthesize_paper`,
+    delete handlers, etc.
+    """
+    conn = get_connection()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _backup_before_migration(reason: str) -> None:
+    """Copy the live DB file into data/migration_backups/ before a destructive migration.
+
+    Keeps the last 5 backups by mtime. Best-effort — never raises.
+    """
+    src = Path(settings.database_path)
+    if not src.exists():
+        return
+    backup_dir = src.parent / "migration_backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = backup_dir / f"poneglyph-{reason}-{ts}.db"
+    try:
+        shutil.copy2(src, dest)
+        logger.info("Migration backup written: %s", dest)
+    except Exception as exc:
+        logger.warning("Migration backup failed: %s", exc)
+        return
+    # Prune to 5 most-recent
+    backups = sorted(backup_dir.glob("poneglyph-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in backups[5:]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+
+def _check_integrity(conn: sqlite3.Connection) -> None:
+    """Run PRAGMA integrity_check; log loudly if it fails. Does not raise."""
+    try:
+        result = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        if result != "ok":
+            logger.error(
+                "DB integrity check FAILED: %s — investigate before continuing", result
+            )
+        else:
+            logger.info("DB integrity check: ok")
+    except Exception as exc:
+        logger.warning("DB integrity check could not run: %s", exc)
+
+
 def _migrate(conn: sqlite3.Connection) -> None:
-    """Run lightweight migrations for schema changes on existing DBs."""
+    """Run lightweight migrations for schema changes on existing DBs.
+
+    Skips work when PRAGMA user_version already matches SCHEMA_VERSION.
+    Snapshots the DB before any destructive (DROP/RENAME) step.
+    """
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+    if current >= SCHEMA_VERSION:
+        return
+
     # Add human_note to paper_notes if missing
     pn_cols = {row[1] for row in conn.execute("PRAGMA table_info(paper_notes)").fetchall()}
     if "human_note" not in pn_cols:
@@ -323,6 +408,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         "recommendation", "model_used", "generated_at",
     }
     if pn_cols_now & legacy_skim_cols:
+        _backup_before_migration("drop_legacy_skim_cols")
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS paper_notes_clean (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -355,6 +441,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
             )
         """)
 
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 
 
@@ -365,6 +452,7 @@ def init_db() -> None:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
         _migrate(conn)
+        _check_integrity(conn)
     finally:
         conn.close()
 

@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 
-from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict
+from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict, transaction
 from poneglyph.services.citation_scout import _lookup_key, discover_from_paper
 from poneglyph.services.llm_bulk import synthesize_paper
 from poneglyph.services.semantic_scholar import get_paper as s2_get_paper
@@ -17,14 +17,6 @@ def _skill_hash(skill_md: str | None) -> str:
     if not skill_md:
         return ""
     return hashlib.sha256(skill_md.encode()).hexdigest()
-
-
-def _ensure_topic_paper_note(topic_id: int, paper_id: int) -> None:
-    """Create a topic_paper_notes row if one doesn't exist yet."""
-    execute(
-        "INSERT OR IGNORE INTO topic_paper_notes (topic_id, paper_id) VALUES (?, ?)",
-        (topic_id, paper_id),
-    )
 
 
 # ---------- Run lifecycle ----------
@@ -79,44 +71,50 @@ async def _synthesize_paper(paper_id: int, topic: dict) -> str:
     if not result:
         return ""  # no skill set — silent skip, not an error
 
-    _ensure_topic_paper_note(topic_id, paper_id)
     skill_hash = _skill_hash(topic.get("skim_skill_md") or "")
+    recommendation = result.get("skim_recommendation", "skip")
 
-    execute(
-        """UPDATE topic_paper_notes
-           SET main_claim = ?, data_source = ?, strategy_type = ?,
-               headline_statistic = ?, signal_mechanism = ?, data_details = ?,
-               sample = ?, universe = ?, portfolio_construction = ?,
-               key_tables = ?, key_metrics = ?,
-               skim_recommendation = ?, skim_model_used = 'claude-haiku-4-5-20251001',
-               skim_skill_hash = ?, skim_generated_at = datetime('now'),
-               skim_pdf_used = ?
-           WHERE topic_id = ? AND paper_id = ?""",
-        (
-            result.get("main_claim", ""),
-            result.get("data_source", ""),
-            result.get("strategy_type", ""),
-            result.get("headline_statistic", ""),
-            result.get("signal_mechanism", ""),
-            result.get("data_details", ""),
-            result.get("sample", ""),
-            result.get("universe", ""),
-            result.get("portfolio_construction", ""),
-            json.dumps(result.get("key_tables", [])),
-            result.get("key_metrics", ""),
-            result.get("skim_recommendation", "skip"),
-            skill_hash,
-            1 if result.get("pdf_used") else 0,
-            topic_id,
-            paper_id,
-        ),
-    )
-
-    # Mirror recommendation to topic_papers for list view
-    execute(
-        "UPDATE topic_papers SET recommendation = ? WHERE topic_id = ? AND paper_id = ?",
-        (result.get("skim_recommendation", "skip"), topic_id, paper_id),
-    )
+    # Atomic: ensure row exists, write skim fields, mirror recommendation. If any
+    # statement fails, the whole skim write rolls back instead of leaving a
+    # half-written topic_paper_notes row paired with stale topic_papers data.
+    with transaction() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO topic_paper_notes (topic_id, paper_id) VALUES (?, ?)",
+            (topic_id, paper_id),
+        )
+        conn.execute(
+            """UPDATE topic_paper_notes
+               SET main_claim = ?, data_source = ?, strategy_type = ?,
+                   headline_statistic = ?, signal_mechanism = ?, data_details = ?,
+                   sample = ?, universe = ?, portfolio_construction = ?,
+                   key_tables = ?, key_metrics = ?,
+                   skim_recommendation = ?, skim_model_used = 'claude-haiku-4-5-20251001',
+                   skim_skill_hash = ?, skim_generated_at = datetime('now'),
+                   skim_pdf_used = ?
+               WHERE topic_id = ? AND paper_id = ?""",
+            (
+                result.get("main_claim", ""),
+                result.get("data_source", ""),
+                result.get("strategy_type", ""),
+                result.get("headline_statistic", ""),
+                result.get("signal_mechanism", ""),
+                result.get("data_details", ""),
+                result.get("sample", ""),
+                result.get("universe", ""),
+                result.get("portfolio_construction", ""),
+                json.dumps(result.get("key_tables", [])),
+                result.get("key_metrics", ""),
+                recommendation,
+                skill_hash,
+                1 if result.get("pdf_used") else 0,
+                topic_id,
+                paper_id,
+            ),
+        )
+        conn.execute(
+            "UPDATE topic_papers SET recommendation = ? WHERE topic_id = ? AND paper_id = ?",
+            (recommendation, topic_id, paper_id),
+        )
     return ""
 
 

@@ -44,7 +44,7 @@ Every step below is tagged with who has to do it:
 The DB file is ~1.1 MB. Trivial to sync.
 
 - **Recommended:** keep the DB path inside the repo for dev convenience, but configure a **scheduled local backup** (see 2.2) into OneDrive. Reason: OneDrive on an open SQLite WAL file can race the writer and produce torn copies. Don't sync the live `.db` — sync a clean snapshot.
-- **[HUMAN]** Confirm the OneDrive folder you want backups under (e.g. `C:\Users\zhong\OneDrive\poneglyph_backups\`) and that OneDrive is actually syncing it. Claude can't see your OneDrive sync status.
+- **Backup location (decided):** `C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\` — folder already exists. Claude will hard-code this as the default (overridable via `PONEGLYPH_BACKUP_DIR` env var) in `scripts/backup_db.py`.
 
 ### 2.2 Scheduled SQLite Online Backup (the key defense)
 
@@ -58,22 +58,77 @@ Use SQLite's built-in [Online Backup API](https://www.sqlite.org/backup.html) �
   - Retention: keep last 14 dailies, last 8 weeklies, last 6 monthlies (delete others by mtime)
   - Optional: `gzip` the file (compresses ~5×)
 - **[CODE + HUMAN]** Register a **Windows Task Scheduler** entry by extending `scripts/setup_scheduler.py`:
-  - Claude writes the schtasks/COM registration code. The **human** runs `python scripts/setup_scheduler.py` once with a logged-in Windows session — Task Scheduler registration requires the current user's credentials and can't be done remotely / headlessly.
-  - **Daily** at a quiet hour (e.g. 03:00) — local + OneDrive copy
-  - On user logon, run the script if no backup exists for "today" (laptop-friendly catch-up)
-  - **[HUMAN]** Verify the task appears under Task Scheduler → "Task Scheduler Library" after install, and let one cycle run before trusting it.
+  - Claude writes the schtasks/COM registration code.
+  - **When the human runs it:** Claude will explicitly prompt with "Now run `python scripts/setup_scheduler.py`" once the script changes are in. Task Scheduler registration requires the current user's logged-in Windows session and can't be done remotely / headlessly.
+  - The script will register two triggers: **daily** at 03:00 and **on user logon** (laptop-friendly catch-up if the machine was off at 03:00).
+  - **[HUMAN]** Verify the task appears under Task Scheduler → "Task Scheduler Library" → look for `Poneglyph Daily Backup`, and let one cycle run before trusting it.
 
-### 2.3 Off-machine redundancy
+### 2.3 Off-machine redundancy — Private GitHub repo (decided)
 
-OneDrive alone is one provider — fine for hardware-failure recovery, weak against account compromise / mass-delete events.
+OneDrive alone is one provider — fine for hardware-failure recovery, weak against account compromise / mass-delete events. Off-machine choice locked in: **private GitHub repo** containing daily gzipped DB snapshots and weekly JSON dumps.
 
-- **[HUMAN]** Pick **one** option (this is a judgement call about your existing tooling):
-  - **Private GitHub repo** for backups: a separate `poneglyph-backups` repo, periodic `git commit` of the gzipped DB + a JSON dump (see 2.4). 1 MB-class files are fine in git; full history doubles as point-in-time recovery.
-  - **Cloud bucket** via `rclone` (S3 / B2 / GCS / Wasabi). Cheapest tier is $0.005/GB/month — negligible. Set lifecycle to "keep 90 days versioned, then archive."
-  - Recommended default: GitHub repo unless you already have an `rclone` setup.
-- **[HUMAN]** If you go GitHub: create the private repo, generate a fine-grained PAT scoped only to that repo, paste it into `.env` as `BACKUP_GITHUB_TOKEN`. Claude can't create repos or generate tokens for you.
-- **[HUMAN]** If you go rclone: install `rclone`, run `rclone config` interactively to authorize the cloud provider (this opens a browser — can't be scripted blindly).
-- **[CODE]** Once credentials exist, Claude can write the post-backup hook in `scripts/backup_db.py` that pushes/uploads the latest snapshot.
+#### 2.3.1 [HUMAN] Create the private backup repo
+
+1. Go to https://github.com/new while logged into your GitHub account.
+2. **Repository name:** `poneglyph-backups`
+3. **Owner:** your personal account.
+4. **Visibility:** **Private** (this is non-negotiable — the DB contains your unredacted human notes and full LLM output).
+5. **Do not** initialise with a README, .gitignore, or license — leave it empty so the first push from the backup script is clean.
+6. Click **Create repository**.
+7. Note the URL (e.g. `https://github.com/<your-username>/poneglyph-backups`) — you'll paste it into `.env` in step 2.3.3.
+
+#### 2.3.2 [HUMAN] Generate a fine-grained Personal Access Token (PAT)
+
+Fine-grained PATs let you scope permissions to a single repo, which is what you want — even if the token leaks, the blast radius is one private backup repo, not your whole GitHub account.
+
+1. Go to https://github.com/settings/personal-access-tokens (Settings → Developer settings → Personal access tokens → **Fine-grained tokens**).
+2. Click **Generate new token**.
+3. Fill in the form:
+   - **Token name:** `poneglyph-backups (write)` — descriptive so you recognise it later.
+   - **Resource owner:** your personal account (the one that owns the new repo).
+   - **Expiration:** pick the longest GitHub allows for your account (typically 1 year). Set a calendar reminder for 11 months out — when it expires, the backup script will start failing silently otherwise.
+   - **Description:** "Used by `scripts/backup_db.py` to push DB snapshots to `poneglyph-backups`."
+4. **Repository access:** select **Only select repositories**, then in the dropdown pick only `poneglyph-backups`. Do **not** grant access to all repos.
+5. **Permissions** — under the **Repository permissions** section (leave Account permissions empty):
+   - **Contents:** **Read and write** (lets the script push commits)
+   - **Metadata:** **Read-only** (auto-selected as a dependency — leave it)
+   - Leave every other permission as **No access**.
+6. Click **Generate token**.
+7. **Copy the token immediately.** GitHub shows it exactly once. It looks like `github_pat_11ABC…`.
+8. If you lose it before pasting it into `.env`, just regenerate — old token can be revoked from the same settings page.
+
+#### 2.3.3 [HUMAN] Add the token to `.env`
+
+Open `C:\Users\zhong\source\repos\poneglyph\.env` and append:
+
+```
+# GitHub fine-grained PAT for poneglyph-backups repo (write access, expires YYYY-MM-DD)
+BACKUP_GITHUB_TOKEN=github_pat_11ABC…paste_here…
+BACKUP_GITHUB_REPO=https://github.com/<your-username>/poneglyph-backups.git
+```
+
+Replace `<your-username>` and the token value. Save the file. **Do not** commit `.env` — it's already in the planned `.gitignore` from §3.1.
+
+> Sanity check: run `git check-ignore -v .env` after `.gitignore` lands. If it prints a `.gitignore:N:.env  .env` line, you're safe.
+
+#### 2.3.4 [CODE] Wire the push into the backup script
+
+Once `BACKUP_GITHUB_TOKEN` and `BACKUP_GITHUB_REPO` are present in `.env`, Claude implements:
+
+- A `_push_to_github(snapshot_path)` helper in `scripts/backup_db.py` that:
+  - Clones the backup repo into a temp dir on first run, pulls on subsequent runs.
+  - Copies the new gzipped snapshot into the working tree (path: `daily/poneglyph-YYYYMMDD-HHMM.db.gz`, plus `weekly/snapshot-YYYYMMDD/…` for the JSON dump on the weekly cadence).
+  - Commits with message `backup YYYY-MM-DD HH:MM` and pushes using the token via the URL form `https://x-access-token:${BACKUP_GITHUB_TOKEN}@github.com/<user>/poneglyph-backups.git`.
+  - On failure (no network, expired token, etc.) logs to stderr but does **not** fail the local backup — OneDrive copy is still the primary line of defense.
+- Retention on the GitHub side: keep all daily snapshots for 90 days, then prune via `git rebase` / `git filter-repo` only if repo size becomes a concern. 1 MB × 365 days ≈ 365 MB — safely within GitHub's free-tier soft limit.
+
+#### 2.3.5 [HUMAN] Verify the first push
+
+After Claude finishes and you've run a manual `python scripts/backup_db.py`:
+
+1. Refresh https://github.com/<your-username>/poneglyph-backups in the browser.
+2. Confirm a `daily/` directory appears with one `.db.gz` file in it.
+3. Confirm the commit author/email looks reasonable (the script will set `git -c user.email=poneglyph-backup@local`).
 
 ### 2.4 JSON-dump snapshot (format-portability insurance)
 
@@ -96,9 +151,8 @@ Currently the on-disk `skills/SKILL_*.md` and the per-topic `topics.skim_skill_m
 
 ### 2.6 PDF redundancy
 
-OneDrive already covers this; only two gaps:
+OneDrive already covers PDFs. One residual gap worth handling:
 
-- **[HUMAN]** **Manually uploaded PDFs** that aren't on arXiv have no other source. Confirm in the OneDrive web UI that the folder has **version history enabled** (it is by default for OneDrive Personal, but verify) and consider moving it into Personal Vault. Claude can't change OneDrive settings.
 - **[CODE]** **Filename collisions / sync conflicts** can produce `paper (1).pdf`. Add a one-time check: `scripts/audit_pdf_paths.py` that walks `papers.pdf_local_path` and reports missing / conflicted files.
 - **[HUMAN]** Run the audit script; act on what it reports (move/rename/re-link) — fixes are case-by-case and need your judgement.
 
@@ -160,17 +214,23 @@ def transaction():
 
 Then refactor `_synthesize_paper`, `delete_paper`, `delete_topic`, and any other multi-write site to use it. This costs ~30 lines and removes a real durability hole.
 
-### 3.3 Soft-delete for high-value rows
+### 3.3 Beef up the delete confirmation dialog
 
-**[HUMAN]** Pick option 1 vs 2 below — Claude can implement either, but the call is a product/UX choice you should make.
+**[CODE]** Today the UI already shows a confirm dialog before delete (`hx-confirm` on the htmx button), but the message is generic and doesn't tell the user what they're about to lose:
 
-Hard `DELETE FROM topics WHERE id = ?` cascades through `topic_paper_notes`, `cross_syntheses`, `topic_embeddings`, `topic_papers`, `topic_steering_log` — minutes of LLM money gone in one click. The UI (htmx button) doesn't have an undo.
+- [topics/detail.html:86](templates/topics/detail.html:86) and [topics/partials/topic_row.html:31](templates/topics/partials/topic_row.html:31) — `"Delete topic '{name}'? This cannot be undone."`
+- [papers/detail.html:246](templates/papers/detail.html:246) — `"Delete paper '{title}'? This cannot be undone."`
 
-Two options, in order of preference:
-1. **[CODE]** **Soft delete** — add `deleted_at TEXT` to `topics`, `papers`, `paper_notes`, `topic_paper_notes`. Routes set `deleted_at = datetime('now')` instead of `DELETE`. Add a "Trash" view that lets the user restore or permanently purge. Filter all read queries with `WHERE deleted_at IS NULL`. Bigger change, best result.
-2. **[CODE]** **Pre-delete snapshot** — before `DELETE FROM topics`, dump the affected rows into a `deleted_topics_archive` table (or a JSONL file under `data/trash/`). Smaller change, recoverable but ugly.
+That's most of the protection already. The remaining gap is informational — the user doesn't know that deleting a topic also nukes every Haiku skim and Sonnet synthesis under it, or that deleting a paper kills their human notes for every topic it belongs to.
 
-If 1 feels heavy, ship 2 now and revisit.
+Fix: rewrite the two `hx-confirm` strings to be specific about the cascade, and to point at the backup as the recovery path:
+
+- **Topic:** `"Delete topic '{name}'?\n\nThis also permanently deletes:\n• Structural skims and deep syntheses for every paper in this topic\n• Cross-paper synthesis history\n• Embeddings and steering log\n• Q&A history scoped to this topic\n\nThe paper records themselves are kept. Recovery requires restoring last night's backup. Continue?"`
+- **Paper:** `"Delete paper '{title}'?\n\nThis also permanently deletes:\n• Your human notes on this paper\n• Structural skims and deep syntheses across every topic it belongs to\n• Citation links\n• Embeddings\n\nRecovery requires restoring last night's backup. Continue?"`
+
+Browser-native `confirm()` ignores `\n` in some browsers — if the formatting matters, replace `hx-confirm` with a tiny JS handler that pops a real `<dialog>` element. Not strictly necessary; one long sentence is fine if you'd rather keep the change minimal.
+
+Combined with the daily backup from §2.2, this is enough protection for a single-user app: the dialog stops accidental clicks, and the worst-case recovery is "restore last night's snapshot." Anything heavier (soft-delete, trash view) is over-engineered for the threat model and was dropped from the plan.
 
 ### 3.4 Backup-before-migrate
 
@@ -239,7 +299,7 @@ Stage so each step gives immediate protection. The "Owner" column shows who has 
 | 3 | Health-check + extra PRAGMAs in `db.py` | 30 min | CODE | Startup catches corruption; backup races handled |
 | 4 | `transaction()` helper + refactor `_synthesize_paper`, `delete_*` | 1 h | CODE | Atomic multi-writes |
 | 5 | `scripts/export_snapshot.py` + weekly task | 1 h | CODE | Format-portable JSON dump |
-| 6 | Soft-delete for `topics` and `papers` (user picks option 1 vs 2 first) | 2–3 h | HUMAN decides → CODE | Undo for accidental cascades |
+| 6 | Rewrite delete confirm dialogs to spell out cascade + point at backup | 15 min | CODE | Misclick prevention |
 | 7 | `scripts/validate_db.py` integrated into backup task | 1 h | CODE | Backups guaranteed clean |
 | 8 | Off-machine redundancy: user creates private GitHub repo + PAT, then Claude wires push | 30 min | HUMAN setup → CODE | Survives single-cloud account loss |
 | 9 | `docs/RECOVERY.md` runbook (Claude) + first restore drill (user) | 1 h | CODE + HUMAN | Proves the system works end-to-end |
@@ -251,14 +311,13 @@ Steps 1–3 alone close the biggest gaps and cost <3 hours.
 
 If you only read one section of this doc:
 
-1. Confirm the OneDrive backup directory you want (§2.1).
-2. Run `python scripts/setup_scheduler.py` once after Claude updates it, then verify the daily task in Task Scheduler (§2.2).
-3. Pick one off-site option and provision its credentials — GitHub PAT or `rclone config` (§2.3).
-4. Confirm OneDrive version-history is on for the PDF folder (§2.6).
-5. Decide soft-delete vs pre-delete-snapshot (§3.3).
-6. After `.gitignore` lands, run `git rm --cached` on tracked-but-now-ignored files (§3.1).
-7. Run the audit script and remediate any flagged PDFs (§2.6).
-8. Do one annual restore drill (§2.7).
+1. ~~Confirm the OneDrive backup directory~~ — **decided**: `C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\` (folder created).
+2. After Claude finishes the backup script, run `python scripts/setup_scheduler.py` once when prompted, then verify `Poneglyph Daily Backup` appears in Task Scheduler (§2.2).
+3. Create the `poneglyph-backups` private GitHub repo, generate a fine-grained PAT, paste `BACKUP_GITHUB_TOKEN` and `BACKUP_GITHUB_REPO` into `.env` — full step-by-step in §2.3.1–2.3.3.
+4. After `.gitignore` lands, run `git rm --cached` on tracked-but-now-ignored files (§3.1).
+5. Run the audit script and remediate any flagged PDFs (§2.6).
+6. Verify the first GitHub push succeeded (§2.3.5).
+7. Do one annual restore drill (§2.7).
 
 Everything else on the list Claude can do unattended.
 

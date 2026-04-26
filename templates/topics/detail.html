@@ -83,7 +83,7 @@
     </button>
     <button class="outline contrast"
             hx-delete="/topics/{{ topic.id }}"
-            hx-confirm="Delete topic '{{ topic.name }}'? This cannot be undone."
+            hx-confirm="Delete topic '{{ topic.name }}'? This will also permanently delete: structural skims and deep syntheses for every paper in this topic, cross-paper synthesis history, embeddings, and the steering log. Paper records themselves are kept. Recovery requires restoring last night's backup. Continue?"
             hx-on::after-request="if(event.detail.successful) window.location='/topics'">
         Delete
     </button>

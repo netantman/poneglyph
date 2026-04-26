@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+
+# Secrets
+.env
+
+# Local data — do NOT commit live SQLite or temp PDFs
+data/poneglyph.db
+data/poneglyph.db-wal
+data/poneglyph.db-shm
+data/migration_backups/
+data/trash/
+data/pdfs/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
