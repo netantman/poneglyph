@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
+    # Off-site backup (used by scripts/backup_db.py only — empty = skip GitHub push)
+    backup_github_token: str = ""
+    backup_github_repo: str = ""
+
     model_config = {"env_file": str(ROOT_DIR / ".env"), "env_file_encoding": "utf-8", "env_ignore_empty": True}
 
 

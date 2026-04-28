@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER_SCRIPT = PROJECT_ROOT / "scripts" / "launch_webapp.pyw"
 BACKUP_SCRIPT = PROJECT_ROOT / "scripts" / "backup_db.py"
 VALIDATE_SCRIPT = PROJECT_ROOT / "scripts" / "validate_db.py"
+BACKUP_WRAPPER = PROJECT_ROOT / "scripts" / "run_backup.cmd"
 
 BACKUP_TASK_NAME = "Poneglyph Daily Backup"
 
@@ -63,28 +64,25 @@ def register_backup_task() -> None:
     """Create / replace the daily DB backup task in Windows Task Scheduler.
 
     Two triggers:
-      - Daily at 03:00
-      - On user logon (with --skip-if-recent so it no-ops if 03:00 already ran)
+      - Daily at 03:00 (registers fine without admin)
+      - On user logon (with --skip-if-recent) — REQUIRES admin to register.
+        If the script isn't running elevated, this trigger is skipped with a
+        warning and the daily trigger still goes through.
     """
-    pythonw = Path(sys.executable)
+    daily_ok = False
+    logon_ok = False
 
-    # Delete any existing task with this name so re-running the setup is idempotent.
+    # Daily 03:00 trigger — point at the .cmd wrapper. The wrapper handles the
+    # validate -> backup chain in shell-native syntax (avoids schtasks quoting hell).
     subprocess.run(
         ["schtasks", "/Delete", "/TN", BACKUP_TASK_NAME, "/F"],
         capture_output=True, text=True,
-    )
-
-    # Daily 03:00 trigger — validate, then back up. If validate fails, schtasks
-    # records the task as failed (cmd /c chains short-circuit on first failure).
-    daily_cmd = (
-        f'cmd /c "\\"{pythonw}\\" \\"{VALIDATE_SCRIPT}\\" '
-        f'&& \\"{pythonw}\\" \\"{BACKUP_SCRIPT}\\""'
     )
     daily = subprocess.run(
         [
             "schtasks", "/Create",
             "/TN", BACKUP_TASK_NAME,
-            "/TR", daily_cmd,
+            "/TR", str(BACKUP_WRAPPER),
             "/SC", "DAILY",
             "/ST", "03:00",
             "/RL", "LIMITED",
@@ -92,21 +90,18 @@ def register_backup_task() -> None:
         ],
         capture_output=True, text=True,
     )
-    if daily.returncode != 0:
+    if daily.returncode == 0:
+        daily_ok = True
+    else:
         print(f"ERROR registering daily trigger: {daily.stderr.strip()}")
-        return
 
-    # Add on-logon catch-up trigger to the same task. Uses the XML route via
-    # /Change is awkward; simpler to register a second task pointed at the
-    # backup script with --skip-if-recent.
+    # Logon catch-up — also via wrapper, with --skip-if-recent passed through.
     logon_task = f"{BACKUP_TASK_NAME} (Logon Catch-up)"
     subprocess.run(
         ["schtasks", "/Delete", "/TN", logon_task, "/F"],
         capture_output=True, text=True,
     )
-    logon_cmd = (
-        f'cmd /c "\\"{pythonw}\\" \\"{BACKUP_SCRIPT}\\" --skip-if-recent"'
-    )
+    logon_cmd = f'{BACKUP_WRAPPER} --skip-if-recent'
     logon = subprocess.run(
         [
             "schtasks", "/Create",
@@ -118,14 +113,22 @@ def register_backup_task() -> None:
         ],
         capture_output=True, text=True,
     )
-    if logon.returncode != 0:
+    if logon.returncode == 0:
+        logon_ok = True
+    elif "Access is denied" in (logon.stderr or "") or "denied" in (logon.stderr or "").lower():
+        print(
+            "NOTE: skipped logon catch-up trigger — ONLOGON tasks need admin to register.\n"
+            "      Re-run this script from an elevated PowerShell to add it,\n"
+            "      or skip it (the daily 03:00 task is the main protection)."
+        )
+    else:
         print(f"ERROR registering logon trigger: {logon.stderr.strip()}")
-        return
 
-    print(f"Registered Task Scheduler entries:")
-    print(f"  - '{BACKUP_TASK_NAME}'           (daily 03:00, validate -> backup)")
-    print(f"  - '{logon_task}'   (on logon, --skip-if-recent)")
-    print(f"  Verify in Task Scheduler -> Task Scheduler Library.")
+    print()
+    print("Task Scheduler status:")
+    print(f"  [{'OK ' if daily_ok else 'FAIL'}] '{BACKUP_TASK_NAME}'  (daily 03:00, validate -> backup)")
+    print(f"  [{'OK ' if logon_ok else 'SKIP'}] '{logon_task}'  (on logon, --skip-if-recent)")
+    print("Verify in Task Scheduler -> Task Scheduler Library.")
 
 
 def main() -> None:
