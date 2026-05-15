@@ -12,3 +12,4 @@ markdown>=3.6
 anthropic>=0.40
 sentence-transformers>=3.0
 numpy>=1.26
+feedparser>=6.0

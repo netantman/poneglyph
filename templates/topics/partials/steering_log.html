@@ -1,0 +1,15 @@
+{% if entries %}
+<ol reversed style="margin:0; padding-left:1.25rem; font-size:0.85rem; color:var(--pico-muted-color);">
+    {% for e in entries %}
+    <li style="margin-bottom:0.35rem;">
+        <span style="color:var(--pico-color);">{{ e.change_description }}</span>
+        <br>
+        <small>{{ e.changed_at | nyc }} ET</small>
+    </li>
+    {% endfor %}
+</ol>
+{% else %}
+<p style="color:var(--pico-muted-color); font-style:italic; font-size:0.9rem; margin:0;">
+    No steering changes recorded yet.
+</p>
+{% endif %}

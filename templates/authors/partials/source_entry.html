@@ -1,0 +1,27 @@
+<div id="source-entry-{{ src.id }}" style="font-size:0.78rem; color:var(--pico-muted-color);">
+    <div style="display:flex; align-items:center; gap:0.3rem;">
+        <span title="Status: {{ src.last_status }}">
+            {% if src.last_status == 'ok' %}✓
+            {% elif src.last_status == 'unverified' %}?
+            {% else %}✗{% endif %}
+        </span>
+        <code style="font-size:0.75rem; word-break:break-all; flex:1;">{{ src.url }}</code>
+        {% if src.last_polled_at %}
+            <span style="white-space:nowrap;">· polled {{ src.last_polled_at[:10] }}</span>
+        {% endif %}
+        <span hx-get="/authors/{{ src.author_id }}/sources/{{ src.id }}/test"
+              hx-target="#source-entry-{{ src.id }}"
+              hx-swap="outerHTML"
+              hx-indicator="#feed-test-ind-{{ src.id }}"
+              style="cursor:pointer; color:var(--pico-primary); flex-shrink:0; white-space:nowrap;">
+            Test
+            <span id="feed-test-ind-{{ src.id }}" class="htmx-indicator"><span class="spinner" style="width:0.7em;height:0.7em;"></span></span>
+        </span>
+        <span hx-delete="/authors/{{ src.author_id }}/sources/{{ src.id }}"
+              hx-target="#sources-{{ src.author_id }}"
+              hx-swap="outerHTML"
+              hx-confirm="Remove this source?"
+              style="cursor:pointer; color:var(--pico-del-color); flex-shrink:0;">✕</span>
+    </div>
+    <div id="feed-test-{{ src.id }}">{{ test_results_html | safe }}</div>
+</div>

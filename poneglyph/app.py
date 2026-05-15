@@ -27,9 +27,10 @@ async def index(request: Request):
 
 
 # --- Register route modules ---
-from poneglyph.routes import papers, scout, topics, search  # noqa: E402
+from poneglyph.routes import authors, papers, scout, topics, search  # noqa: E402
 
 app.include_router(topics.router)
 app.include_router(papers.router)
 app.include_router(scout.router)
 app.include_router(search.router)
+app.include_router(authors.router)

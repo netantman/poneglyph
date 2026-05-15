@@ -26,9 +26,21 @@ class TopicUpdate(BaseModel):
 
 # ---------- Helpers ----------
 
+def _dedup_preserve_order(items: list[str]) -> list[str]:
+    """Deduplicate a list case-insensitively, preserving order and original case."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
 def parse_comma_list(raw: str) -> list[str]:
-    """Split a comma-separated string into a cleaned list."""
-    return [s.strip() for s in raw.split(",") if s.strip()]
+    """Split a comma-separated string into a cleaned, deduplicated list."""
+    return _dedup_preserve_order([s.strip() for s in raw.split(",") if s.strip()])
 
 
 def parse_newline_list(raw: str) -> list[str]:

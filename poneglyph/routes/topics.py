@@ -425,7 +425,128 @@ async def recalculate_relevance(request: Request, topic_id: int):
     return resp
 
 
-# ---------- steering log helper ----------
+# ---------- Steering log view ----------
+
+@router.get("/{topic_id}/steering-log", response_class=HTMLResponse)
+async def steering_log(request: Request, topic_id: int):
+    """Return the steering log partial for HTMX lazy-load."""
+    rows = fetch_all(
+        """SELECT change_description, changed_at
+           FROM topic_steering_log
+           WHERE topic_id = ?
+           ORDER BY changed_at DESC
+           LIMIT 50""",
+        (topic_id,),
+    )
+    entries = [row_to_dict(r) for r in rows]
+    return templates.TemplateResponse(
+        "topics/partials/steering_log.html",
+        {"request": request, "entries": entries},
+    )
+
+
+# ---------- Steering suggestions ----------
+
+@router.post("/{topic_id}/suggest-steering", response_class=HTMLResponse)
+async def suggest_steering(request: Request, topic_id: int):
+    """Run Haiku against the topic's human notes and return a suggestion form."""
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("<p>Topic not found.</p>", status_code=404)
+
+    note_rows = fetch_all(
+        """SELECT p.title, pn.human_note AS note
+           FROM papers p
+           JOIN topic_papers tp ON p.id = tp.paper_id
+           LEFT JOIN paper_notes pn ON pn.paper_id = p.id
+           WHERE tp.topic_id = ?
+           ORDER BY p.published_date DESC""",
+        (topic_id,),
+    )
+    notes = [row_to_dict(r) for r in note_rows]
+
+    from poneglyph.services.llm_suggest import suggest_steering as _suggest
+    suggestions, error = await _suggest(topic, notes)
+
+    return templates.TemplateResponse(
+        "topics/partials/steering_suggestions.html",
+        {
+            "request": request,
+            "topic": topic,
+            "suggestions": suggestions,
+            "error": error,
+            "note_count": sum(1 for n in notes if (n.get("note") or "").strip()),
+        },
+    )
+
+
+@router.post("/{topic_id}/apply-suggestions", response_class=HTMLResponse)
+async def apply_suggestions(request: Request, topic_id: int):
+    """Apply checked steering suggestions and update the topic."""
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("<p>Topic not found.</p>", status_code=404)
+
+    form = await request.form()
+    kw_add = form.getlist("kw_add")
+    kw_remove = form.getlist("kw_remove")
+    ps_add = form.getlist("ps_add")
+    ps_remove = form.getlist("ps_remove")
+
+    if not any([kw_add, kw_remove, ps_add, ps_remove]):
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers("No suggestions selected", "error"))
+        return resp
+
+    from poneglyph.models import _dedup_preserve_order
+
+    old_kw = list(topic.get("keywords") or [])
+    old_ps = list(topic.get("problem_statements") or [])
+
+    kw_remove_lower = {k.lower() for k in kw_remove}
+    old_kw_lower = {k.lower() for k in old_kw}
+    new_kw = _dedup_preserve_order(
+        [k for k in old_kw if k.lower() not in kw_remove_lower]
+        + [k for k in kw_add if k.lower() not in old_kw_lower]
+    )
+    ps_remove_lower = {p.lower() for p in ps_remove}
+    new_ps = [p for p in old_ps if p.lower() not in ps_remove_lower] + [
+        p for p in ps_add if p.lower() not in {x.lower() for x in old_ps}
+    ]
+
+    execute(
+        "UPDATE topics SET keywords=?, problem_statements=?, updated_at=datetime('now') WHERE id=?",
+        (json.dumps(new_kw), json.dumps(new_ps), topic_id),
+    )
+
+    _log_steering_change(topic_id, topic, new_kw, list(topic.get("priority_keywords") or []), new_ps)
+
+    # Re-score if PS changed — same guarded pattern as recalculate_relevance
+    if old_ps != new_ps:
+        try:
+            from poneglyph.services.relevance import refresh_topic_embeddings
+            topic_for_embed = {**topic, "problem_statements": new_ps}
+            refresh_topic_embeddings(topic_id, topic_for_embed)
+            asyncio.create_task(_run_relevance_update(topic_id))
+        except Exception as exc:
+            logger.warning("apply_suggestions: relevance re-score skipped: %s", exc)
+
+    parts = []
+    if kw_add:
+        parts.append(f"+{len(kw_add)} keyword(s)")
+    if kw_remove:
+        parts.append(f"-{len(kw_remove)} keyword(s)")
+    if ps_add:
+        parts.append(f"+{len(ps_add)} problem statement(s)")
+    if ps_remove:
+        parts.append(f"-{len(ps_remove)} problem statement(s)")
+
+    resp = HTMLResponse("")
+    resp.headers["HX-Redirect"] = f"/topics/{topic_id}"
+    resp.headers.update(_toast_headers(f"Steering updated: {', '.join(parts)}"))
+    return resp
+
 
 # ---------- Cross-paper synthesis ----------
 
@@ -567,6 +688,160 @@ async def start_cross_synthesis(request: Request, topic_id: int):
 async def cross_synthesis_status(topic_id: int, run_id: int):
     """Poll endpoint for cross-synthesis run status."""
     return HTMLResponse(_cross_status_html(run_id, topic_id))
+
+
+# ---------- Topic-author subscriptions ----------
+
+@router.get("/{topic_id}/authors", response_class=HTMLResponse)
+async def topic_authors_panel(request: Request, topic_id: int):
+    """Return the Authors-in-scope panel partial for a topic."""
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("<p>Topic not found.</p>", status_code=404)
+
+    all_authors = fetch_all("SELECT * FROM authors WHERE entity_type != 'stub' ORDER BY name", ())
+    subscribed = {
+        row["author_id"]
+        for row in fetch_all("SELECT author_id FROM topic_authors WHERE topic_id=?", (topic_id,))
+    }
+    authors_with_state = []
+    for row in all_authors:
+        a = row_to_dict(row)
+        a["subscribed"] = a["id"] in subscribed
+        a["active"] = False
+        if a["id"] in subscribed:
+            ta = fetch_one(
+                "SELECT active FROM topic_authors WHERE topic_id=? AND author_id=?",
+                (topic_id, a["id"]),
+            )
+            a["active"] = bool(ta and ta["active"])
+        authors_with_state.append(a)
+
+    return templates.TemplateResponse(
+        "topics/partials/topic_authors.html",
+        {"request": request, "topic": topic, "authors": authors_with_state},
+    )
+
+
+@router.post("/{topic_id}/authors/{author_id}/toggle", response_class=HTMLResponse)
+async def toggle_topic_author(request: Request, topic_id: int, author_id: int):
+    """Toggle an author's subscription for a topic; trigger backfill on first opt-in."""
+    existing = fetch_one(
+        "SELECT active FROM topic_authors WHERE topic_id=? AND author_id=?",
+        (topic_id, author_id),
+    )
+
+    if existing is None:
+        # First opt-in — create subscription and trigger backfill
+        execute(
+            "INSERT OR IGNORE INTO topic_authors (topic_id, author_id, active) VALUES (?, ?, 1)",
+            (topic_id, author_id),
+        )
+        execute(
+            "INSERT INTO topic_steering_log (topic_id, change_description) VALUES (?, ?)",
+            (topic_id, f"Subscribed to author id={author_id}; backfill queued"),
+        )
+        run_id = execute(
+            "INSERT INTO scout_runs (topic_id, source) VALUES (?, 'article_scout_backfill')",
+            (topic_id,),
+        )
+        from datetime import datetime, timedelta, timezone
+        from poneglyph.pipeline import run_article_scout_for_topic
+        lookback_row = fetch_one(
+            "SELECT scout_lookback_days FROM topic_authors WHERE topic_id=? AND author_id=?",
+            (topic_id, author_id),
+        )
+        lookback = (lookback_row["scout_lookback_days"] if lookback_row else 30) or 30
+        since = datetime.now(timezone.utc) - timedelta(days=lookback)
+        asyncio.create_task(run_article_scout_for_topic(topic_id, run_id, since=since))
+        new_active = True
+    else:
+        new_active = not existing["active"]
+        execute(
+            "UPDATE topic_authors SET active=? WHERE topic_id=? AND author_id=?",
+            (int(new_active), topic_id, author_id),
+        )
+
+    return await topic_authors_panel(request, topic_id)
+
+
+@router.post("/{topic_id}/scout-articles", response_class=HTMLResponse)
+async def start_article_scout(request: Request, topic_id: int):
+    """Start an on-demand article scout for a topic."""
+    from poneglyph.pipeline import create_run, run_article_scout_for_topic
+
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse('<small style="color:var(--pico-del-color);">Topic not found.</small>')
+
+    sub_count = fetch_one(
+        "SELECT COUNT(*) as n FROM topic_authors WHERE topic_id=? AND active=1", (topic_id,)
+    )
+    if not sub_count or sub_count["n"] == 0:
+        return HTMLResponse(
+            '<small style="color:var(--pico-del-color);">No active author subscriptions — '
+            'add authors to this topic first.</small>'
+        )
+
+    run_id = create_run(topic_id, "article_scout")
+    asyncio.create_task(run_article_scout_for_topic(topic_id, run_id))
+
+    from poneglyph.routes.scout import _run_status_html
+    return HTMLResponse(_run_status_html(run_id))
+
+
+@router.post("/{topic_id}/scout-now", response_class=HTMLResponse)
+async def start_scout_now(request: Request, topic_id: int):
+    """Start citation scout and article scout in parallel; skip whichever leg lacks prerequisites."""
+    from poneglyph.pipeline import create_run, run_topic_scout, run_article_scout_for_topic
+    from poneglyph.routes.scout import _run_status_html
+
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse('<small style="color:var(--pico-del-color);">Topic not found.</small>')
+
+    html_parts: list[str] = []
+    _label = (
+        'style="font-size:0.85rem;font-weight:600;margin:0.25rem 0 0.1rem;"'
+    )
+
+    # --- Citation scout leg ---
+    if topic.get("skim_skill_md"):
+        seed_row = fetch_one(
+            "SELECT COUNT(*) as n FROM topic_papers WHERE topic_id=? AND is_scout_seed=1",
+            (topic_id,),
+        )
+        if seed_row and seed_row["n"] > 0:
+            cit_run_id = create_run(topic_id, "topic_scout")
+            asyncio.create_task(run_topic_scout(topic_id, cit_run_id))
+            html_parts.append(f"<p {_label}>Citation Scout</p>" + _run_status_html(cit_run_id))
+        else:
+            html_parts.append(
+                '<small style="color:var(--pico-muted-color);">Citation scout: no seed papers — skipped.</small>'
+            )
+    else:
+        html_parts.append(
+            '<small style="color:var(--pico-muted-color);">Citation scout: no skim skill — skipped.</small>'
+        )
+
+    # --- Article scout leg ---
+    sub_row = fetch_one(
+        "SELECT COUNT(*) as n FROM topic_authors WHERE topic_id=? AND active=1", (topic_id,)
+    )
+    if sub_row and sub_row["n"] > 0:
+        art_run_id = create_run(topic_id, "article_scout")
+        asyncio.create_task(run_article_scout_for_topic(topic_id, art_run_id))
+        html_parts.append(
+            f'<p {_label} style="margin-top:0.75rem;">Article Scout</p>'
+            + _run_status_html(art_run_id)
+        )
+    else:
+        html_parts.append(
+            '<small style="color:var(--pico-muted-color);display:block;margin-top:0.5rem;">'
+            "Article scout: no active author subscriptions — skipped.</small>"
+        )
+
+    return HTMLResponse("\n".join(html_parts))
 
 
 # ---------- steering log helper ----------

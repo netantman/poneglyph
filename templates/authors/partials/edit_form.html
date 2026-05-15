@@ -1,0 +1,63 @@
+<form hx-put="/authors/{{ author.id }}"
+      hx-target="#edit-status-{{ author.id }}"
+      hx-swap="innerHTML"
+      style="padding:0.6rem 0;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <label style="margin:0;">
+            <small>Name</small>
+            <input type="text" name="name" value="{{ author.name }}" required
+                   style="margin:0; padding:0.25rem 0.5rem; font-size:0.85rem;">
+        </label>
+        <label style="margin:0;">
+            <small>Byline</small>
+            <input type="text" name="byline" value="{{ author.byline or '' }}"
+                   style="margin:0; padding:0.25rem 0.5rem; font-size:0.85rem;">
+        </label>
+    </div>
+    <label style="margin-top:0.4rem; display:block;">
+        <small>Type</small>
+        <select name="entity_type" style="margin:0; padding:0.25rem; font-size:0.85rem; height:auto;">
+            <option value="author" {% if author.entity_type == 'author' %}selected{% endif %}>author</option>
+            <option value="aggregator" {% if author.entity_type == 'aggregator' %}selected{% endif %}>aggregator</option>
+            <option value="stub" {% if author.entity_type == 'stub' %}selected{% endif %}>stub</option>
+        </select>
+    </label>
+    <label style="margin-top:0.4rem; display:block;">
+        <small>Notes</small>
+        <textarea name="notes" rows="2"
+                  style="margin:0; padding:0.25rem 0.5rem; font-size:0.85rem;">{{ author.notes or '' }}</textarea>
+    </label>
+
+    <div style="margin-top:0.6rem;">
+        <small style="font-weight:600; display:block; margin-bottom:0.3rem;">RSS Sources</small>
+        {% if author.sources %}
+        <div id="edit-sources-{{ author.id }}" style="margin-bottom:0.35rem;">
+            {% for src in author.sources %}
+            <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; color:var(--pico-muted-color); margin-bottom:0.2rem;">
+                <span title="{{ src.last_status }}">{% if src.last_status == 'ok' %}✓{% elif src.last_status == 'unverified' %}?{% else %}✗{% endif %}</span>
+                <code style="flex:1; word-break:break-all; font-size:0.75rem;">{{ src.url }}</code>
+                <span hx-delete="/authors/{{ author.id }}/sources/{{ src.id }}"
+                      hx-target="#author-row-{{ author.id }}"
+                      hx-swap="innerHTML"
+                      hx-confirm="Remove this source?"
+                      style="cursor:pointer; color:var(--pico-del-color); flex-shrink:0;">✕</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <label style="margin:0;">
+            <small>Add source URL</small>
+            <input type="url" name="source_url"
+                   placeholder="https://example.substack.com/feed"
+                   style="margin:0; padding:0.25rem 0.5rem; font-size:0.85rem;">
+        </label>
+        <input type="hidden" name="source_type" value="rss">
+    </div>
+
+    <div id="edit-status-{{ author.id }}" style="margin-top:0.25rem;"></div>
+    <div style="display:flex; gap:0.4rem; margin-top:0.4rem;">
+        <button type="submit" style="margin:0; padding:0.25rem 0.6rem; font-size:0.82rem;">Save</button>
+        <button type="button" style="margin:0; padding:0.25rem 0.6rem; font-size:0.82rem;"
+                onclick="window.location.href='/authors'">Cancel</button>
+    </div>
+</form>

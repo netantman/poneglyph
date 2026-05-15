@@ -1,0 +1,85 @@
+{% if error %}
+<p style="color:var(--pico-del-color); font-size:0.9rem; margin:0;">&#10007;&nbsp;{{ error }}</p>
+
+{% elif not suggestions.keywords_add and not suggestions.keywords_remove
+        and not suggestions.ps_add and not suggestions.ps_remove %}
+<p style="color:var(--pico-muted-color); font-style:italic; font-size:0.9rem; margin:0;">
+    No suggestions — your keywords and problem statements already capture what the notes describe,
+    or the notes are too sparse.
+</p>
+
+{% else %}
+{% if suggestions.reasoning %}
+<p style="font-size:0.88rem; color:var(--pico-muted-color); margin-bottom:1rem;">
+    <em>{{ suggestions.reasoning }}</em>
+</p>
+{% endif %}
+
+<div id="suggestions-form">
+
+    {% if suggestions.keywords_add %}
+    <fieldset>
+        <legend style="font-size:0.88rem; font-weight:600;">Keywords to add</legend>
+        {% for kw in suggestions.keywords_add %}
+        <label style="font-size:0.88rem; display:flex; align-items:center; gap:0.5rem; margin-bottom:0.3rem;">
+            <input type="checkbox" name="kw_add" value="{{ kw }}" checked>
+            <span style="background:rgba(22,163,74,0.12); color:#16a34a;
+                         padding:0.1rem 0.5rem; border-radius:1rem;">+ {{ kw }}</span>
+        </label>
+        {% endfor %}
+    </fieldset>
+    {% endif %}
+
+    {% if suggestions.keywords_remove %}
+    <fieldset>
+        <legend style="font-size:0.88rem; font-weight:600;">Keywords to remove</legend>
+        {% for kw in suggestions.keywords_remove %}
+        <label style="font-size:0.88rem; display:flex; align-items:center; gap:0.5rem; margin-bottom:0.3rem;">
+            <input type="checkbox" name="kw_remove" value="{{ kw }}">
+            <span style="background:rgba(220,38,38,0.1); color:#dc2626;
+                         padding:0.1rem 0.5rem; border-radius:1rem;">− {{ kw }}</span>
+        </label>
+        {% endfor %}
+    </fieldset>
+    {% endif %}
+
+    {% if suggestions.ps_add %}
+    <fieldset>
+        <legend style="font-size:0.88rem; font-weight:600;">Problem statements to add</legend>
+        {% for ps in suggestions.ps_add %}
+        <label style="font-size:0.88rem; display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:0.5rem;">
+            <input type="checkbox" name="ps_add" value="{{ ps }}" checked style="margin-top:0.2rem;">
+            <span style="background:rgba(22,163,74,0.08); color:#16a34a;
+                         padding:0.25rem 0.6rem; border-radius:0.4rem; line-height:1.4;">+ {{ ps }}</span>
+        </label>
+        {% endfor %}
+    </fieldset>
+    {% endif %}
+
+    {% if suggestions.ps_remove %}
+    <fieldset>
+        <legend style="font-size:0.88rem; font-weight:600;">Problem statements to remove</legend>
+        {% for ps in suggestions.ps_remove %}
+        <label style="font-size:0.88rem; display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:0.5rem;">
+            <input type="checkbox" name="ps_remove" value="{{ ps }}">
+            <span style="background:rgba(220,38,38,0.07); color:#dc2626;
+                         padding:0.25rem 0.6rem; border-radius:0.4rem; line-height:1.4;">− {{ ps }}</span>
+        </label>
+        {% endfor %}
+    </fieldset>
+    {% endif %}
+
+    <div style="display:flex; gap:0.75rem; align-items:center; margin-top:0.75rem;">
+        <button type="button"
+                style="margin:0; padding:0.35rem 1rem; font-size:0.88rem;"
+                hx-post="/topics/{{ topic.id }}/apply-suggestions"
+                hx-include="#suggestions-form"
+                hx-swap="none">
+            Apply Selected
+        </button>
+        <small style="color:var(--pico-muted-color);">
+            Based on {{ note_count }} note(s). Unchecked items are ignored.
+        </small>
+    </div>
+</div>
+{% endif %}

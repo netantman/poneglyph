@@ -1,8 +1,11 @@
-"""Scouting pipeline: citation discovery + Haiku structural skim."""
+"""Scouting pipeline: citation discovery + Haiku structural skim + article RSS scout."""
 
 import hashlib
 import json
 import logging
+import re
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict, transaction
 from poneglyph.services.citation_scout import _lookup_key, discover_from_paper
@@ -11,12 +14,25 @@ from poneglyph.services.semantic_scholar import get_paper as s2_get_paper
 
 logger = logging.getLogger(__name__)
 
+_DEREF_META_RE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\'](?:og:title|article:author|author)["\'][^>]*content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+
 
 def _skill_hash(skill_md: str | None) -> str:
     """Return SHA-256 hex digest of a skill prompt, or empty string if None."""
     if not skill_md:
         return ""
     return hashlib.sha256(skill_md.encode()).hexdigest()
+
+
+def _ensure_topic_paper_note(topic_id: int, paper_id: int) -> None:
+    """INSERT OR IGNORE a topic_paper_notes row so subsequent UPDATEs have a target."""
+    execute(
+        "INSERT OR IGNORE INTO topic_paper_notes (topic_id, paper_id) VALUES (?, ?)",
+        (topic_id, paper_id),
+    )
 
 
 # ---------- Run lifecycle ----------
@@ -253,3 +269,441 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
     except Exception as exc:
         logger.exception("run_topic_scout failed: %s", exc)
         _finish_run(run_id, found=0, new=0, status="error", error=str(exc))
+
+
+# ── Article scout pipeline ────────────────────────────────────────────────────
+
+def _canonical_source_id(canonical_url: str) -> str:
+    """Derive a short stable source_id from a canonical URL."""
+    import hashlib as _hl
+    return _hl.sha256(canonical_url.encode()).hexdigest()[:24]
+
+
+async def _fetch_article_meta(url: str) -> dict:
+    """Fetch an external URL and extract og:/meta title, author, published_time.
+
+    Returns a dict with keys: title, author, published_date (YYYY-MM-DD or ""), description.
+    Best-effort — never raises.
+    """
+    meta: dict = {"title": "", "author": "", "published_date": "", "description": ""}
+    try:
+        import httpx
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            resp = await client.get(
+                url,
+                headers={"User-Agent": "Poneglyph/1.0 research-scout"},
+            )
+        if resp.status_code != 200:
+            return meta
+        html = resp.text[:50_000]
+    except Exception as exc:
+        logger.debug("_fetch_article_meta: %s — %s", url, exc)
+        return meta
+
+    def _og(prop: str) -> str:
+        m = re.search(
+            rf'<meta[^>]+(?:property|name)=["\'](?:og:{prop}|{prop}|article:{prop})["\'][^>]*'
+            rf'content=["\']([^"\']+)["\']',
+            html, re.IGNORECASE,
+        )
+        return m.group(1).strip() if m else ""
+
+    meta["title"] = _og("title") or ""
+    meta["author"] = _og("author") or ""
+    meta["description"] = _og("description") or ""
+    pub = _og("published_time") or _og("published") or ""
+    if pub:
+        meta["published_date"] = pub[:10]
+    return meta
+
+
+def _find_or_create_stub_author(domain: str, author_name: str, notes: str = "") -> int:
+    """Return the author_id for a domain, creating a stub if necessary."""
+    # Match by existing author_sources URL host
+    sources = fetch_all("SELECT author_id, url FROM author_sources", ())
+    for row in sources:
+        try:
+            if urlparse(row["url"]).netloc == domain:
+                return row["author_id"]
+        except Exception:
+            pass
+
+    name = author_name.strip() or domain
+    # Try exact name match first
+    existing = fetch_one("SELECT id FROM authors WHERE name = ?", (name,))
+    if existing:
+        return existing["id"]
+
+    author_id = execute(
+        """INSERT OR IGNORE INTO authors (name, entity_type, source_origin, notes)
+           VALUES (?, 'stub', 'aggregator_dereference', ?)""",
+        (name, notes or f"Auto-created from aggregator pointer to {domain}"),
+    )
+    if not author_id:
+        row = fetch_one("SELECT id FROM authors WHERE name = ?", (name,))
+        author_id = row["id"] if row else None
+
+    if author_id:
+        execute(
+            "INSERT OR IGNORE INTO author_sources (author_id, source_type, url, last_status) VALUES (?, 'scrape', ?, 'unverified')",
+            (author_id, f"https://{domain}"),
+        )
+
+    return author_id or 0
+
+
+async def _ingest_rss_item(
+    item,  # RssItem
+    topic: dict,
+    author_id: int,
+    is_aggregator: bool,
+) -> tuple[int | None, bool, str]:
+    """Ingest one RSS item (or its dereferenced target) as a papers row.
+
+    For aggregators, fetches the linked URL and uses its metadata instead.
+    Returns (paper_id, is_new, access_status).
+    """
+    from poneglyph.services.rss_fetch import is_paywalled, item_body
+
+    canonical_url = item.link
+    title = item.title
+    author_name = item.author_name
+    pub_dt = item.published_dt
+    body_html = item_body(item)
+    body_text = ""
+    paywalled = is_paywalled(item)
+
+    resolved_author_id = author_id
+
+    if is_aggregator and canonical_url:
+        # Dereference: fetch the real article page
+        meta = await _fetch_article_meta(canonical_url)
+        if meta.get("title"):
+            title = meta["title"]
+        if meta.get("published_date"):
+            try:
+                pub_dt = datetime.fromisoformat(meta["published_date"]).replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
+        if meta.get("author"):
+            author_name = meta["author"]
+
+        domain = urlparse(canonical_url).netloc or canonical_url
+        stub_notes = f"Auto-created from aggregator pointer to {canonical_url}"
+        resolved_author_id = _find_or_create_stub_author(domain, author_name, stub_notes)
+
+    # Dedup by canonical_url
+    existing = fetch_one("SELECT id FROM papers WHERE canonical_url = ?", (canonical_url,)) if canonical_url else None
+    if existing:
+        return existing["id"], False, "public"
+
+    # Build authors list
+    authors_json = json.dumps([author_name] if author_name else [])
+    pub_date_str = pub_dt.strftime("%Y-%m-%d") if pub_dt else ""
+
+    # Get author's display name for published_venue
+    author_row = row_to_dict(fetch_one("SELECT name FROM authors WHERE id = ?", (resolved_author_id,)))
+    venue = author_row["name"] if author_row else ""
+
+    access_status = "paywalled" if paywalled else "public"
+    source_id = _canonical_source_id(canonical_url) if canonical_url else ""
+
+    paper_id = execute(
+        """INSERT OR IGNORE INTO papers
+           (source, source_id, title, authors, published_venue, published_date,
+            url, abstract, content_type, access_status, canonical_url, author_id)
+           VALUES ('rss', ?, ?, ?, ?, ?, ?, ?, 'article', ?, ?, ?)""",
+        (
+            source_id, title, authors_json, venue, pub_date_str,
+            canonical_url or "", (item.summary or "")[:2000],
+            access_status, canonical_url, resolved_author_id,
+        ),
+    )
+
+    if not paper_id:
+        # IGNORE fired — already exists under (source, source_id)
+        existing2 = fetch_one("SELECT id FROM papers WHERE source='rss' AND source_id=?", (source_id,))
+        return (existing2["id"] if existing2 else None), False, access_status
+
+    # Cache body in paper_fulltext
+    if body_html or item.summary:
+        from poneglyph.services.llm_bulk import strip_html
+        body_text = strip_html(body_html) if body_html else item.summary or ""
+        execute(
+            """INSERT OR REPLACE INTO paper_fulltext (paper_id, body_text, body_html, source)
+               VALUES (?, ?, ?, 'rss_full')""",
+            (paper_id, body_text[:80_000], (body_html or "")[:200_000]),
+        )
+        execute(
+            "UPDATE papers SET body_fetched_at = datetime('now') WHERE id = ?",
+            (paper_id,),
+        )
+
+    return paper_id, True, access_status
+
+
+async def _synthesize_article_paper(paper_id: int, topic: dict, body_text: str) -> str:
+    """Run article skill synthesis for one paper in one topic. Returns "" on success."""
+    from poneglyph.services.llm_article import synthesize_article, skill_hash
+
+    paper = row_to_dict(fetch_one("SELECT * FROM papers WHERE id = ?", (paper_id,)))
+    if not paper:
+        return "Paper not found"
+
+    topic_id = topic["id"]
+
+    note_rows = fetch_all(
+        """SELECT pn.human_note FROM paper_notes pn
+           JOIN topic_papers tp ON tp.paper_id = pn.paper_id
+           WHERE tp.topic_id = ? AND pn.paper_id != ?
+             AND pn.human_note IS NOT NULL AND pn.human_note != ''
+           ORDER BY pn.updated_at DESC LIMIT 10""",
+        (topic_id, paper_id),
+    )
+    related_notes = [r["human_note"] for r in note_rows]
+
+    result, err = await synthesize_article(paper, topic, body_text, related_notes)
+    if err:
+        return err
+    if not result:
+        return ""
+
+    sh = skill_hash(topic.get("article_skim_skill_md") or "")
+    recommendation = result.get("skim_recommendation", "skip")
+
+    with transaction() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO topic_paper_notes (topic_id, paper_id) VALUES (?, ?)",
+            (topic_id, paper_id),
+        )
+        conn.execute(
+            """UPDATE topic_paper_notes
+               SET main_claim=?, data_source=?, strategy_type=?,
+                   headline_statistic=?, signal_mechanism=?, data_details=?,
+                   sample=?, universe=?, portfolio_construction=?,
+                   key_tables=?, key_metrics=?,
+                   skim_recommendation=?, skim_model_used=?,
+                   skim_skill_hash=?, skim_generated_at=datetime('now'), skim_pdf_used=0
+               WHERE topic_id=? AND paper_id=?""",
+            (
+                result.get("main_claim", ""),
+                result.get("data_source", ""),
+                result.get("strategy_type", ""),
+                result.get("headline_statistic", ""),
+                result.get("signal_mechanism", ""),
+                result.get("data_details", ""),
+                result.get("sample", ""),
+                result.get("universe", ""),
+                result.get("portfolio_construction", ""),
+                json.dumps(result.get("key_tables", [])),
+                result.get("key_metrics", ""),
+                recommendation,
+                "claude-haiku-4-5-20251001",
+                sh,
+                topic_id, paper_id,
+            ),
+        )
+        conn.execute(
+            "UPDATE topic_papers SET recommendation=? WHERE topic_id=? AND paper_id=?",
+            (recommendation, topic_id, paper_id),
+        )
+    return ""
+
+
+async def run_article_scout_for_topic(
+    topic_id: int,
+    run_id: int,
+    since: datetime | None = None,
+) -> None:
+    """Scout RSS feeds for all subscribed authors in a topic.
+
+    since: if None, uses each source's last_polled_at. Pass an explicit datetime for backfill.
+    Never raises — all errors are logged and recorded in scout_runs.
+    """
+    try:
+        from poneglyph.services.rss_fetch import fetch_feed
+        from poneglyph.services.article_relevance import is_relevant
+
+        topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+        if not topic:
+            _finish_run(run_id, found=0, new=0, status="error", error="Topic not found")
+            return
+
+        # Load the article skill from canonical file if topic has none
+        if not topic.get("article_skim_skill_md"):
+            _load_default_article_skill(topic_id)
+            topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+
+        subscriptions = fetch_all(
+            """SELECT ta.author_id, ta.scout_lookback_days, a.entity_type, a.name AS author_name
+               FROM topic_authors ta
+               JOIN authors a ON a.id = ta.author_id
+               WHERE ta.topic_id = ? AND ta.active = 1""",
+            (topic_id,),
+        )
+        if not subscriptions:
+            _finish_run(run_id, found=0, new=0, status="no_authors")
+            return
+
+        total_found = 0
+        total_new = 0
+
+        for sub in subscriptions:
+            author_id = sub["author_id"]
+            is_aggregator = sub["entity_type"] == "aggregator"
+            lookback_days = sub["scout_lookback_days"] or 30
+
+            sources = fetch_all(
+                "SELECT * FROM author_sources WHERE author_id = ? AND last_status != 'http_error'",
+                (author_id,),
+            )
+
+            for src in sources:
+                src_dict = row_to_dict(src)
+                source_id_db = src_dict["id"]
+
+                # Determine cutoff
+                if since is not None:
+                    cutoff = since
+                elif src_dict.get("last_polled_at"):
+                    try:
+                        cutoff = datetime.fromisoformat(src_dict["last_polled_at"]).replace(tzinfo=timezone.utc)
+                    except Exception:
+                        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+                else:
+                    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+
+                result = await fetch_feed(
+                    src_dict["url"],
+                    etag=src_dict.get("etag"),
+                    last_modified=src_dict.get("last_modified"),
+                )
+
+                if result.error:
+                    execute(
+                        "UPDATE author_sources SET last_status=?, last_error=? WHERE id=?",
+                        ("http_error", result.error[:500], source_id_db),
+                    )
+                    continue
+
+                # Update ETag / Last-Modified
+                execute(
+                    "UPDATE author_sources SET etag=?, last_modified=?, last_status='ok', last_error=NULL WHERE id=?",
+                    (result.etag, result.last_modified, source_id_db),
+                )
+
+                if result.not_modified:
+                    continue
+
+                new_items = [
+                    item for item in result.items
+                    if item.published_dt is None or item.published_dt >= cutoff
+                ]
+
+                for item in new_items:
+                    total_found += 1
+
+                    # Relevance gate
+                    rel = await is_relevant(topic, item.title, item.summary or "")
+                    log_reason = f"score={rel.score:.2f} {rel.reason}"
+
+                    if not rel.relevant and not rel.borderline:
+                        logger.debug(
+                            "article_scout: skip '%s' (%s)", item.title[:60], log_reason
+                        )
+                        continue
+
+                    paper_id, is_new, access_status = await _ingest_rss_item(
+                        item, topic, author_id, is_aggregator
+                    )
+                    if not paper_id:
+                        continue
+
+                    # Link to topic
+                    execute(
+                        """INSERT OR IGNORE INTO topic_papers
+                           (topic_id, paper_id, matched_keywords, relevance_score, is_scout_seed)
+                           VALUES (?, ?, '[]', ?, 0)""",
+                        (topic_id, paper_id, rel.score),
+                    )
+                    # Log relevance decision in steering log
+                    execute(
+                        "INSERT INTO topic_steering_log (topic_id, change_description) VALUES (?, ?)",
+                        (
+                            topic_id,
+                            f"Article scout: {'ingested' if is_new else 'linked'} "
+                            f"'{item.title[:80]}' ({log_reason})"
+                            + (" [borderline]" if rel.borderline else ""),
+                        ),
+                    )
+
+                    if is_new:
+                        total_new += 1
+
+                    # Synthesize public articles
+                    if access_status == "public" and not rel.borderline:
+                        ft_row = row_to_dict(
+                            fetch_one("SELECT body_text FROM paper_fulltext WHERE paper_id=?", (paper_id,))
+                        )
+                        body_text = (ft_row or {}).get("body_text") or ""
+                        if body_text:
+                            err = await _synthesize_article_paper(paper_id, topic, body_text)
+                            if err:
+                                logger.warning("_synthesize_article_paper paper=%d: %s", paper_id, err)
+
+                execute(
+                    "UPDATE author_sources SET last_polled_at=datetime('now') WHERE id=?",
+                    (source_id_db,),
+                )
+
+            execute(
+                "UPDATE scout_runs SET papers_found=?, papers_new=? WHERE id=?",
+                (total_found, total_new, run_id),
+            )
+
+        _finish_run(run_id, found=total_found, new=total_new)
+        logger.info(
+            "run_article_scout_for_topic done: topic=%d found=%d new=%d",
+            topic_id, total_found, total_new,
+        )
+    except Exception as exc:
+        logger.exception("run_article_scout_for_topic failed: %s", exc)
+        _finish_run(run_id, found=0, new=0, status="error", error=str(exc))
+
+
+def _load_default_article_skill(topic_id: int) -> None:
+    """Populate topics.article_skim_skill_md from the canonical skill file if it's NULL."""
+    from pathlib import Path
+
+    skill_path = (
+        Path(__file__).resolve().parent.parent
+        / "skills"
+        / "SKILL_SINGLE_ARTICLE_SYNTHESIS.md"
+    )
+    if not skill_path.exists():
+        return
+    skill_md = skill_path.read_text(encoding="utf-8")
+    execute(
+        "UPDATE topics SET article_skim_skill_md=? WHERE id=? AND article_skim_skill_md IS NULL",
+        (skill_md, topic_id),
+    )
+
+
+async def run_all_article_scouts(run_id: int | None = None) -> None:
+    """Run article scout for every topic that has active author subscriptions.
+
+    Intended for the scheduler's --mode article-scout invocation.
+    """
+    topic_rows = fetch_all(
+        """SELECT DISTINCT ta.topic_id FROM topic_authors ta
+           WHERE ta.active = 1""",
+        (),
+    )
+    if not topic_rows:
+        logger.info("run_all_article_scouts: no active subscriptions")
+        return
+
+    for row in topic_rows:
+        tid = row["topic_id"]
+        rid = run_id or create_run(tid, "article_scout")
+        await run_article_scout_for_topic(tid, rid)

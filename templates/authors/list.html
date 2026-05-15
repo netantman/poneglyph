@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Authors — Poneglyph{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h2>Authors</h2>
+    <p>Global library of authors and aggregators to scout across topics.</p>
+</hgroup>
+
+<div class="grid">
+    <!-- Left: add form -->
+    <div>
+        <article>
+            <header><strong>Add Author / Aggregator</strong></header>
+            <form hx-post="/authors"
+                  hx-target="#author-form-status"
+                  hx-swap="innerHTML"
+                  hx-indicator="#add-author-ind">
+                <label>
+                    Name
+                    <input type="text" name="name" id="author-name-input" required
+                           placeholder="e.g. Quant Galore"
+                           hx-get="/authors/suggest-url"
+                           hx-trigger="blur[this.value.length > 2]"
+                           hx-target="#url-autofill-area"
+                           hx-swap="innerHTML"
+                           hx-include="[name='hint']"
+                           hx-vals='js:{"name": this.value}'>
+                </label>
+                <label>
+                    Byline / handle
+                    <input type="text" name="byline" placeholder="@handle or display name">
+                </label>
+                <label>
+                    Platform hint
+                    <select name="hint" id="hint-select">
+                        <option value="">— unknown —</option>
+                        <option value="substack">Substack</option>
+                        <option value="wordpress">WordPress</option>
+                        <option value="ghost">Ghost</option>
+                        <option value="blogspot">Blogspot</option>
+                        <option value="medium">Medium</option>
+                        <option value="custom">Custom / other</option>
+                    </select>
+                </label>
+                <label>
+                    Type
+                    <select name="entity_type">
+                        <option value="author">Author</option>
+                        <option value="aggregator">Aggregator</option>
+                    </select>
+                </label>
+                <div id="url-autofill-area">
+                    <div style="min-height:1.2rem; margin-bottom:0.25rem; font-size:0.85rem;"></div>
+                    <label>
+                        RSS / Feed URL
+                        <input type="url" name="source_url" id="new-source-url"
+                               placeholder="https://example.substack.com/feed">
+                    </label>
+                </div>
+                <input type="hidden" name="source_type" value="rss">
+                <label>
+                    Notes (optional)
+                    <textarea name="notes" rows="2" placeholder="Any notes about this author…"></textarea>
+                </label>
+                <button type="submit">
+                    Add Author
+                    <span id="add-author-ind" class="htmx-indicator"><span class="spinner"></span></span>
+                </button>
+                <div id="author-form-status" style="margin-top:0.5rem;"></div>
+            </form>
+        </article>
+    </div>
+
+    <!-- Right: authors list -->
+    <div>
+        {% if authors %}
+        <article>
+            <header><strong>Authors ({{ authors | length }})</strong></header>
+            {% for author in authors %}
+            <div id="author-row-{{ author.id }}" style="padding:0.6rem 0; border-bottom:1px solid var(--pico-muted-border-color);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
+                    <div style="flex:1; min-width:0;">
+                        <strong>{{ author.name }}</strong>
+                        {% if author.byline %}
+                            <small style="color:var(--pico-muted-color);"> · {{ author.byline }}</small>
+                        {% endif %}
+                        <span style="font-size:0.72rem; padding:0.1rem 0.4rem; border-radius:1rem; margin-left:0.4rem;
+                            {% if author.entity_type == 'aggregator' %}background:rgba(234,179,8,0.2); color:#ca8a04;
+                            {% else %}background:rgba(59,130,246,0.15); color:#3b82f6;{% endif %}">
+                            {{ author.entity_type }}
+                        </span>
+                        {% if author.sources %}
+                        <div style="margin-top:0.3rem;">
+                            {% for src in author.sources %}
+                            {% set test_results_html = "" %}
+                            {% include "authors/partials/source_entry.html" %}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div style="font-size:0.78rem; color:var(--pico-del-color); margin-top:0.2rem;">No sources — add an RSS URL below</div>
+                        {% endif %}
+                        <!-- Add source inline -->
+                        <details style="margin-top:0.4rem;">
+                            <summary style="font-size:0.78rem; color:var(--pico-muted-color); cursor:pointer;">+ Add source</summary>
+                            <form hx-post="/authors/{{ author.id }}/sources"
+                                  hx-target="#sources-{{ author.id }}"
+                                  hx-swap="outerHTML"
+                                  style="display:flex; gap:0.4rem; align-items:center; margin-top:0.3rem;">
+                                <input type="url" name="url" placeholder="https://…" required
+                                       style="margin:0; padding:0.25rem 0.5rem; font-size:0.8rem; flex:1; min-width:0;">
+                                <input type="hidden" name="source_type" value="rss">
+                                <button type="submit" style="margin:0; padding:0.25rem 0.75rem; font-size:0.8rem; width:auto; flex-shrink:0;">Add</button>
+                            </form>
+                        </details>
+                        <div id="sources-{{ author.id }}"></div>
+                    </div>
+                    <div style="display:flex; gap:0.3rem; flex-shrink:0;">
+                        <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.78rem;"
+                                hx-get="/authors/{{ author.id }}/edit"
+                                hx-target="#author-row-{{ author.id }}"
+                                hx-swap="innerHTML">Edit</button>
+                        <button class="outline contrast" style="margin:0; padding:0.2rem 0.5rem; font-size:0.78rem;"
+                                hx-delete="/authors/{{ author.id }}"
+                                hx-confirm="Delete author '{{ author.name }}'? This will also remove it from all topic subscriptions."
+                                hx-target="body"
+                                hx-swap="innerHTML">✕</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </article>
+        {% else %}
+        <article>
+            <p style="color:var(--pico-muted-color); font-style:italic;">No authors yet. Add one using the form.</p>
+        </article>
+        {% endif %}
+
+        {% if stubs %}
+        <article style="margin-top:1rem;">
+            <header>
+                <strong>Pending Review ({{ stubs | length }})</strong>
+                <small style="font-weight:normal; color:var(--pico-muted-color); margin-left:0.5rem;">
+                    auto-created from aggregator links
+                </small>
+            </header>
+            {% for stub in stubs %}
+            <div style="padding:0.5rem 0; border-bottom:1px solid var(--pico-muted-border-color);">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                    <div style="flex:1;">
+                        <strong>{{ stub.name }}</strong>
+                        {% if stub.notes %}
+                        <div style="font-size:0.78rem; color:var(--pico-muted-color);">{{ stub.notes }}</div>
+                        {% endif %}
+                        {% for src in stub.sources %}
+                        <div style="font-size:0.78rem; color:var(--pico-muted-color);">
+                            <code>{{ src.url }}</code>
+                            <span style="color:var(--pico-del-color);">(unverified)</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div style="display:flex; gap:0.3rem; flex-shrink:0;">
+                        <form hx-post="/authors/{{ stub.id }}/promote"
+                              hx-target="body"
+                              hx-swap="innerHTML"
+                              style="display:inline-flex; gap:0.3rem; margin:0;">
+                            <select name="entity_type" style="margin:0; padding:0.2rem; font-size:0.78rem; height:auto;">
+                                <option value="author">author</option>
+                                <option value="aggregator">aggregator</option>
+                            </select>
+                            <button type="submit" style="margin:0; padding:0.2rem 0.5rem; font-size:0.78rem;">Promote</button>
+                        </form>
+                        <button class="outline contrast" style="margin:0; padding:0.2rem 0.5rem; font-size:0.78rem;"
+                                hx-delete="/authors/{{ stub.id }}"
+                                hx-confirm="Delete stub '{{ stub.name }}'?"
+                                hx-target="body"
+                                hx-swap="outerHTML">✕</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </article>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

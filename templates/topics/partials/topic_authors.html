@@ -1,0 +1,39 @@
+{% if authors %}
+<div style="display:flex; flex-direction:column; gap:0.35rem;">
+    {% for author in authors %}
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;
+                padding:0.3rem 0.4rem; border-radius:0.3rem;
+                background:{% if author.active %}rgba(34,197,94,0.08){% else %}transparent{% endif %};">
+        <div style="display:flex; align-items:center; gap:0.4rem; flex:1; min-width:0;">
+            <span style="font-size:0.8rem;">
+                {% if author.entity_type == 'aggregator' %}📰{% else %}✍{% endif %}
+            </span>
+            <span style="font-size:0.85rem; font-weight:{% if author.active %}600{% else %}normal{% endif %};">
+                {{ author.name }}
+            </span>
+            <span style="font-size:0.7rem; padding:0.05rem 0.35rem; border-radius:1rem;
+                {% if author.entity_type == 'aggregator' %}background:rgba(234,179,8,0.2); color:#ca8a04;
+                {% else %}background:rgba(59,130,246,0.12); color:#3b82f6;{% endif %}">
+                {{ author.entity_type }}
+            </span>
+        </div>
+        <button class="outline {% if not author.active %}secondary{% endif %}"
+                style="margin:0; padding:0.15rem 0.55rem; font-size:0.76rem;"
+                hx-post="/topics/{{ topic.id }}/authors/{{ author.id }}/toggle"
+                hx-target="#topic-authors-list"
+                hx-swap="innerHTML"
+                hx-indicator="#ta-ind-{{ author.id }}">
+            {% if author.active %}Unsubscribe{% else %}Subscribe{% endif %}
+            <span id="ta-ind-{{ author.id }}" class="htmx-indicator">
+                <span class="spinner" style="width:0.7em; height:0.7em;"></span>
+            </span>
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p style="color:var(--pico-muted-color); font-style:italic; font-size:0.9rem; margin:0;">
+    No authors in library yet.
+    <a href="/authors">Add authors</a> to start scouting articles.
+</p>
+{% endif %}

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Bump this whenever a destructive migration is added. _migrate() compares against
 # PRAGMA user_version and only runs newer steps, so we don't re-execute migrations
 # on every boot.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA_SQL = """
 -- Topics: user-defined research areas with keywords, steering, and LLM skill prompts
@@ -173,6 +173,52 @@ CREATE TABLE IF NOT EXISTS qa_history (
     question    TEXT NOT NULL,
     answer_md   TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Authors: global library of authors and aggregators to scout
+CREATE TABLE IF NOT EXISTS authors (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    byline          TEXT NOT NULL DEFAULT '',
+    entity_type     TEXT NOT NULL DEFAULT 'author',    -- 'author' | 'aggregator' | 'stub'
+    source_origin   TEXT NOT NULL DEFAULT 'manual',    -- 'manual' | 'aggregator_dereference'
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(name)
+);
+
+-- Author sources: one author can have multiple feed URLs
+CREATE TABLE IF NOT EXISTS author_sources (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_id       INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+    source_type     TEXT NOT NULL DEFAULT 'rss',       -- 'rss' | 'newsletter' | 'scrape' | 'manual'
+    url             TEXT NOT NULL,
+    verified_at     TEXT,
+    last_polled_at  TEXT,
+    last_status     TEXT NOT NULL DEFAULT 'unverified', -- 'ok' | 'http_error' | 'parse_error' | 'unverified'
+    last_error      TEXT,
+    etag            TEXT,
+    last_modified   TEXT,
+    UNIQUE(author_id, url)
+);
+
+-- Topic-author subscriptions (many-to-many)
+CREATE TABLE IF NOT EXISTS topic_authors (
+    topic_id            INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    author_id           INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+    added_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    active              INTEGER NOT NULL DEFAULT 1,
+    scout_lookback_days INTEGER NOT NULL DEFAULT 30,
+    PRIMARY KEY (topic_id, author_id)
+);
+
+-- Full-text cache for articles (and optionally PDF-extracted text)
+CREATE TABLE IF NOT EXISTS paper_fulltext (
+    paper_id        INTEGER PRIMARY KEY REFERENCES papers(id) ON DELETE CASCADE,
+    body_text       TEXT NOT NULL DEFAULT '',
+    body_html       TEXT NOT NULL DEFAULT '',
+    source          TEXT NOT NULL DEFAULT 'rss_full',  -- 'rss_full' | 'subscriber_rss' | 'manual_paste' | 'pdf_extract'
+    cached_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- FTS5 virtual table for full-text keyword search across papers
@@ -441,6 +487,79 @@ def _migrate(conn: sqlite3.Connection) -> None:
             )
         """)
 
+    # ── Schema version 2: article / author scouting ──────────────────────────
+    if current < 2:
+        # New columns on papers
+        p_cols_v2 = {row[1] for row in conn.execute("PRAGMA table_info(papers)").fetchall()}
+        for col, defn in [
+            ("content_type",   "TEXT NOT NULL DEFAULT 'academic'"),
+            ("access_status",  "TEXT NOT NULL DEFAULT 'public'"),
+            ("canonical_url",  "TEXT"),
+            ("author_id",      "INTEGER"),
+            ("body_fetched_at","TEXT"),
+        ]:
+            if col not in p_cols_v2:
+                conn.execute(f"ALTER TABLE papers ADD COLUMN {col} {defn}")
+
+        # New column on topics
+        t_cols_v2 = {row[1] for row in conn.execute("PRAGMA table_info(topics)").fetchall()}
+        if "article_skim_skill_md" not in t_cols_v2:
+            conn.execute("ALTER TABLE topics ADD COLUMN article_skim_skill_md TEXT")
+
+        # New tables (if the DB predates _SCHEMA_SQL additions above)
+        tables_v2 = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        for ddl in [
+            """CREATE TABLE IF NOT EXISTS authors (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT NOT NULL,
+                byline        TEXT NOT NULL DEFAULT '',
+                entity_type   TEXT NOT NULL DEFAULT 'author',
+                source_origin TEXT NOT NULL DEFAULT 'manual',
+                notes         TEXT NOT NULL DEFAULT '',
+                created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(name)
+            )""",
+            """CREATE TABLE IF NOT EXISTS author_sources (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                author_id      INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+                source_type    TEXT NOT NULL DEFAULT 'rss',
+                url            TEXT NOT NULL,
+                verified_at    TEXT,
+                last_polled_at TEXT,
+                last_status    TEXT NOT NULL DEFAULT 'unverified',
+                last_error     TEXT,
+                etag           TEXT,
+                last_modified  TEXT,
+                UNIQUE(author_id, url)
+            )""",
+            """CREATE TABLE IF NOT EXISTS topic_authors (
+                topic_id            INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                author_id           INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+                added_at            TEXT NOT NULL DEFAULT (datetime('now')),
+                active              INTEGER NOT NULL DEFAULT 1,
+                scout_lookback_days INTEGER NOT NULL DEFAULT 30,
+                PRIMARY KEY (topic_id, author_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS paper_fulltext (
+                paper_id  INTEGER PRIMARY KEY REFERENCES papers(id) ON DELETE CASCADE,
+                body_text TEXT NOT NULL DEFAULT '',
+                body_html TEXT NOT NULL DEFAULT '',
+                source    TEXT NOT NULL DEFAULT 'rss_full',
+                cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )""",
+        ]:
+            conn.execute(ddl)
+
+        # Indexes for article queries
+        conn.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_papers_content_type   ON papers(content_type);
+            CREATE INDEX IF NOT EXISTS idx_papers_canonical_url  ON papers(canonical_url);
+            CREATE INDEX IF NOT EXISTS idx_papers_author_id      ON papers(author_id);
+            CREATE INDEX IF NOT EXISTS idx_author_sources_polled ON author_sources(last_polled_at);
+        """)
+
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 
@@ -503,7 +622,8 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
     # Parse known JSON columns
     for key in ("keywords", "priority_keywords", "problem_statements",
                 "sources", "authors", "matched_keywords", "paper_ids",
-                "research_directions", "paper_info", "key_tables"):
+                "research_directions", "paper_info", "key_tables",
+                "article_cross_references"):
         if key in d and isinstance(d[key], str):
             try:
                 d[key] = json.loads(d[key])

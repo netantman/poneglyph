@@ -1,0 +1,15 @@
+<div id="sources-{{ author.id }}">
+    {% for src in author.sources %}
+    <div style="font-size:0.78rem; color:var(--pico-muted-color); display:flex; align-items:center; gap:0.3rem;">
+        <span title="Status: {{ src.last_status }}">
+            {% if src.last_status == 'ok' %}✓{% elif src.last_status == 'unverified' %}?{% else %}✗{% endif %}
+        </span>
+        <code style="font-size:0.75rem; word-break:break-all;">{{ src.url }}</code>
+        <span hx-delete="/authors/{{ author.id }}/sources/{{ src.id }}"
+              hx-target="#sources-{{ author.id }}"
+              hx-swap="outerHTML"
+              hx-confirm="Remove this source?"
+              style="cursor:pointer; color:var(--pico-del-color); flex-shrink:0;">✕</span>
+    </div>
+    {% endfor %}
+</div>

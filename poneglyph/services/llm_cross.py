@@ -42,7 +42,15 @@ Keywords: {keywords}
 
 ---
 
-## Corpus: {paper_count} paper(s)
+## Corpus: {paper_count} source(s)
+
+Evidence tiers used in this corpus:
+- **peer_reviewed**: peer-reviewed journal or conference paper
+- **working_paper**: arXiv / SSRN pre-print
+- **practitioner_blog**: named practitioner blog or newsletter
+- **aggregator_pointer**: link via aggregator (Quantocracy etc.)
+
+Each source is tagged [evidence_tier: ...] below.
 
 {paper_sections}
 
@@ -53,8 +61,12 @@ Using the synthesis notes and annotations above, produce:
 1. A **multi-paper synthesis narrative** that addresses:
    - What progress has been made toward solving the problem statements?
    - What gaps and open questions remain?
-   - Where do papers agree, and where do they diverge?
-   - Which papers carry the strongest evidence?
+   - Where do sources agree, and where do they diverge?
+   - Which sources carry the strongest evidence?
+   - Weight peer-reviewed and working papers above practitioner blogs for consensus claims.
+     Surface practitioner-blog insights separately under a **Practitioner perspective** subsection
+     when they extend or contradict the academic consensus — do not let a single high-volume
+     blogger dominate consensus over multiple papers.
 
 2. A list of **3–7 concrete research directions** (specific, actionable next steps).
 
@@ -64,6 +76,33 @@ Return ONLY a JSON object — no markdown fences, no commentary:
   "research_directions": ["direction 1", "direction 2", "..."]
 }}
 """
+
+
+_ACADEMIC_VENUES = {
+    "journal of finance", "review of financial studies", "journal of financial economics",
+    "review of finance", "management science", "journal of portfolio management",
+    "financial analysts journal", "journal of financial and quantitative analysis",
+    "nber", "ssrn",
+}
+
+
+def _evidence_tier(paper: dict) -> str:
+    """Classify a paper/article into an evidence tier for cross-synthesis weighting."""
+    content_type = (paper.get("content_type") or "academic").lower()
+    venue = (paper.get("published_venue") or "").lower()
+    source = (paper.get("source") or "").lower()
+
+    if content_type == "article":
+        return "practitioner_blog"
+
+    # Academic paper — distinguish peer-reviewed from preprint
+    if source in ("arxiv",) or "arxiv" in venue:
+        return "working_paper"
+    if any(v in venue for v in _ACADEMIC_VENUES):
+        return "peer_reviewed"
+    if venue:
+        return "peer_reviewed"
+    return "working_paper"
 
 
 async def cross_synthesize(
@@ -107,9 +146,10 @@ async def cross_synthesize(
         authors_str = ", ".join(authors[:4]) if isinstance(authors, list) else str(authors)
         paper_id = paper.get("id", "")
 
+        tier = _evidence_tier(paper)
         sec = f"### [{i}] {title}\n"
         sec += f"Authors: {authors_str} ({year or 'n.d.'}) | {venue or '—'}\n"
-        sec += f"Paper ID: {paper_id}\n\n"
+        sec += f"Paper ID: {paper_id} | [evidence_tier: {tier}]\n\n"
 
         if skim:
             if skim.get("main_claim"):

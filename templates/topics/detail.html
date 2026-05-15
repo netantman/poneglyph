@@ -48,22 +48,25 @@
             hx-target="#topic-edit-area"
             hx-swap="innerHTML"
             onclick="window.scrollTo({top:0,behavior:'smooth'})">Edit Topic</button>
-    {% if topic.skim_skill_md %}
     <button class="outline"
-            hx-post="/scout/topic/{{ topic.id }}"
+            hx-post="/topics/{{ topic.id }}/scout-now"
             hx-target="#scout-status-area"
             hx-swap="innerHTML"
-            hx-confirm="Scout citations for {{ seed_count }} seed paper(s) in this topic? This calls Semantic Scholar and may take a few minutes."
+            hx-confirm="Scout new content for this topic? Checks citation graph ({{ seed_count }} seed paper(s)) and RSS feeds from subscribed authors."
             hx-indicator="#scout-ind">
         Scout Now
         <span id="scout-ind" class="htmx-indicator"><span class="spinner"></span></span>
     </button>
-    {% else %}
-    <button class="outline" disabled
-            title="Upload a Structural Skim skill first — edit this topic to add one">
-        Scout Now
+    <button class="outline"
+            hx-post="/topics/{{ topic.id }}/suggest-steering"
+            hx-target="#steering-suggestions-area"
+            hx-swap="innerHTML"
+            hx-indicator="#suggest-ind"
+            hx-on::htmx:response-error="document.getElementById('steering-suggestions-area').innerHTML='<p style=\'color:var(--pico-del-color);font-size:0.9rem;\'>Request failed (status ' + event.detail.xhr.status + '). Check server logs.</p>'"
+            title="Analyse your paper notes and suggest keyword / problem-statement adjustments">
+        Suggest from Notes
+        <span id="suggest-ind" class="htmx-indicator"><span class="spinner"></span></span>
     </button>
-    {% endif %}
     <button class="outline"
             hx-post="/topics/{{ topic.id }}/cross-synthesis"
             hx-target="#cross-synthesis-status-area"
@@ -184,6 +187,45 @@
         {% with synthesis=latest_synthesis %}
             {% include "topics/partials/cross_synthesis.html" %}
         {% endwith %}
+    </div>
+</article>
+
+<article style="margin-top:1.5rem;">
+    <header>
+        <strong>Steering Suggestions</strong>
+        <span style="font-size:0.78rem; font-weight:normal; color:var(--pico-muted-color); margin-left:0.5rem;">
+            click <em>Suggest from Notes</em> above to run
+        </span>
+    </header>
+    <div id="steering-suggestions-area">
+        <p style="color:var(--pico-muted-color); font-style:italic; font-size:0.9rem; margin:0;">
+            No suggestions loaded yet.
+        </p>
+    </div>
+</article>
+
+<article style="margin-top:1.5rem;">
+    <header style="display:flex; justify-content:space-between; align-items:center;">
+        <strong>Authors in Scope</strong>
+        <a href="/authors" style="font-size:0.78rem; color:var(--pico-muted-color);">Manage authors →</a>
+    </header>
+    <div id="topic-authors-list"
+         hx-get="/topics/{{ topic.id }}/authors"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <small style="color:var(--pico-muted-color);">Loading…</small>
+    </div>
+</article>
+
+<article style="margin-top:1.5rem;">
+    <header style="display:flex; justify-content:space-between; align-items:center;">
+        <strong>Steering Log</strong>
+    </header>
+    <div id="steering-log-area"
+         hx-get="/topics/{{ topic.id }}/steering-log"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <small style="color:var(--pico-muted-color);">Loading…</small>
     </div>
 </article>
 
