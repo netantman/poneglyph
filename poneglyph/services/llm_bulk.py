@@ -133,7 +133,7 @@ For any field you cannot determine from the available text, use an empty string 
 _SKIM_FIELDS = (
     "main_claim", "data_source", "strategy_type", "headline_statistic",
     "signal_mechanism", "data_details", "sample", "universe",
-    "portfolio_construction", "key_tables", "key_metrics",
+    "portfolio_construction", "key_tables", "key_metrics", "skip_reason",
 )
 
 _SKIM_TOOL = {
@@ -154,6 +154,10 @@ _SKIM_TOOL = {
             "key_tables": {"type": "array", "items": {"type": "string"}},
             "key_metrics": {"type": "string"},
             "recommendation": {"type": "string", "enum": ["read", "skip", "deep_dive"]},
+            "skip_reason": {
+                "type": "string",
+                "description": "Required when recommendation is 'skip'. One concrete sentence stating the specific problem statement, methodology flaw, or scope mismatch that disqualifies this paper.",
+            },
         },
         "required": [
             "main_claim", "data_source", "strategy_type", "headline_statistic",

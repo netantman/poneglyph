@@ -72,8 +72,8 @@
             <option value="opus">Opus $$</option>
         </select>
         <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
-                hx-post="/papers/{{ paper_id }}/deep-synthesis"
-                hx-vals="js:{topic_id:'{{ topic_id }}', model_choice: document.getElementById('deep-model-{{ topic_id }}').value}"
+                hx-post="/papers/{{ paper_id }}/topics/{{ topic_id }}/deep-synthesis"
+                hx-vals="js:{model_choice: document.getElementById('deep-model-{{ topic_id }}').value}"
                 hx-target="#deep-tab-panel"
                 hx-swap="innerHTML"
                 hx-indicator="#deep-ind-{{ topic_id }}">
@@ -104,8 +104,8 @@
             <option value="opus">Opus $$</option>
         </select>
         <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
-                hx-post="/papers/{{ paper_id }}/deep-synthesis"
-                hx-vals="js:{topic_id:'{{ topic_id }}', model_choice: document.getElementById('deep-model-gen-{{ topic_id }}').value}"
+                hx-post="/papers/{{ paper_id }}/topics/{{ topic_id }}/deep-synthesis"
+                hx-vals="js:{model_choice: document.getElementById('deep-model-gen-{{ topic_id }}').value}"
                 hx-target="#deep-tab-panel"
                 hx-swap="innerHTML"
                 hx-indicator="#deep-ind-gen-{{ topic_id }}">

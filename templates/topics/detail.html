@@ -123,23 +123,13 @@
 
         <article>
             <header><strong>Configuration</strong></header>
-            <p>
-                <strong>Skim Skill:</strong>
-                {% if topic.skim_skill_md %}
-                <span style="color:#16a34a; font-size:0.85rem;">✓ Custom</span>
-                {% else %}
-                <span style="color:#dc2626; font-size:0.85rem;">✗ None — scouting disabled</span>
-                {% endif %}
-            </p>
-            <p>
-                <strong>Deep Skill:</strong>
-                {% if topic.deep_synthesis_skill_md %}
-                <span style="color:#16a34a; font-size:0.85rem;">✓ Custom</span>
-                {% else %}
-                <span style="color:var(--pico-muted-color); font-size:0.85rem;">✗ None — deep synthesis disabled</span>
-                {% endif %}
-            </p>
-            <p><strong>Created:</strong> {{ topic.created_at | nyc }} ET</p>
+            {% with skill_name="skim", editing=False %}
+                {% include "topics/partials/skill_editor.html" %}
+            {% endwith %}
+            {% with skill_name="deep", editing=False %}
+                {% include "topics/partials/skill_editor.html" %}
+            {% endwith %}
+            <p style="margin-top:0.5rem;"><strong>Created:</strong> {{ topic.created_at | nyc }} ET</p>
             <p><strong>Updated:</strong> {{ topic.updated_at | nyc }} ET</p>
         </article>
     </div>

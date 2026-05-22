@@ -71,11 +71,10 @@ async def _synthesize_paper(paper_id: int, topic: dict) -> str:
 
     # Gather human notes from other papers in the topic for context
     note_rows = fetch_all(
-        """SELECT pn.human_note FROM paper_notes pn
-           JOIN topic_papers tp ON tp.paper_id = pn.paper_id
-           WHERE tp.topic_id = ? AND pn.paper_id != ?
-           AND pn.human_note IS NOT NULL AND pn.human_note != ''
-           ORDER BY pn.updated_at DESC
+        """SELECT tpn.human_note FROM topic_paper_notes tpn
+           WHERE tpn.topic_id = ? AND tpn.paper_id != ?
+             AND tpn.human_note IS NOT NULL AND tpn.human_note != ''
+           ORDER BY tpn.id DESC
            LIMIT 5""",
         (topic_id, paper_id),
     )
@@ -103,7 +102,7 @@ async def _synthesize_paper(paper_id: int, topic: dict) -> str:
                SET main_claim = ?, data_source = ?, strategy_type = ?,
                    headline_statistic = ?, signal_mechanism = ?, data_details = ?,
                    sample = ?, universe = ?, portfolio_construction = ?,
-                   key_tables = ?, key_metrics = ?,
+                   key_tables = ?, key_metrics = ?, skip_reason = ?,
                    skim_recommendation = ?, skim_model_used = 'claude-haiku-4-5-20251001',
                    skim_skill_hash = ?, skim_generated_at = datetime('now'),
                    skim_pdf_used = ?
@@ -120,6 +119,7 @@ async def _synthesize_paper(paper_id: int, topic: dict) -> str:
                 result.get("portfolio_construction", ""),
                 json.dumps(result.get("key_tables", [])),
                 result.get("key_metrics", ""),
+                result.get("skip_reason", ""),
                 recommendation,
                 skill_hash,
                 1 if result.get("pdf_used") else 0,
@@ -453,11 +453,10 @@ async def _synthesize_article_paper(paper_id: int, topic: dict, body_text: str) 
     topic_id = topic["id"]
 
     note_rows = fetch_all(
-        """SELECT pn.human_note FROM paper_notes pn
-           JOIN topic_papers tp ON tp.paper_id = pn.paper_id
-           WHERE tp.topic_id = ? AND pn.paper_id != ?
-             AND pn.human_note IS NOT NULL AND pn.human_note != ''
-           ORDER BY pn.updated_at DESC LIMIT 10""",
+        """SELECT tpn.human_note FROM topic_paper_notes tpn
+           WHERE tpn.topic_id = ? AND tpn.paper_id != ?
+             AND tpn.human_note IS NOT NULL AND tpn.human_note != ''
+           ORDER BY tpn.id DESC LIMIT 10""",
         (topic_id, paper_id),
     )
     related_notes = [r["human_note"] for r in note_rows]
@@ -481,7 +480,7 @@ async def _synthesize_article_paper(paper_id: int, topic: dict, body_text: str) 
                SET main_claim=?, data_source=?, strategy_type=?,
                    headline_statistic=?, signal_mechanism=?, data_details=?,
                    sample=?, universe=?, portfolio_construction=?,
-                   key_tables=?, key_metrics=?,
+                   key_tables=?, key_metrics=?, skip_reason=?,
                    skim_recommendation=?, skim_model_used=?,
                    skim_skill_hash=?, skim_generated_at=datetime('now'), skim_pdf_used=0
                WHERE topic_id=? AND paper_id=?""",
@@ -497,6 +496,7 @@ async def _synthesize_article_paper(paper_id: int, topic: dict, body_text: str) 
                 result.get("portfolio_construction", ""),
                 json.dumps(result.get("key_tables", [])),
                 result.get("key_metrics", ""),
+                result.get("skip_reason", ""),
                 recommendation,
                 "claude-haiku-4-5-20251001",
                 sh,

@@ -3,8 +3,8 @@
      style="cursor: pointer; min-height: 3rem; padding: 0.5rem; border-radius: 0.25rem; transition: background 0.15s;"
      onmouseenter="this.style.background='var(--pico-card-sectioning-background-color)'"
      onmouseleave="this.style.background=''">
-    {% if note and note.human_note %}
-    <div class="ql-snow"><div class="ql-editor" style="padding: 0; border: none;">{{ note.human_note | safe }}</div></div>
+    {% if topic_note %}
+    <div class="ql-snow"><div class="ql-editor" style="padding: 0; border: none;">{{ topic_note | safe }}</div></div>
     {% else %}
     <p style="color: var(--pico-muted-color); font-style: italic; margin: 0;">No note yet — click to add.</p>
     {% endif %}

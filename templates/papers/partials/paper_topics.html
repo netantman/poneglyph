@@ -6,6 +6,13 @@
         {% if t.relevance_score and t.relevance_score > 0 %}
         <small style="color: var(--pico-muted-color);">({{ "%.2f"|format(t.relevance_score) }})</small>
         {% endif %}
+        <span hx-post="/papers/{{ paper_id }}/remove-from-topic"
+              hx-vals='{"topic_id": "{{ t.id }}"}'
+              hx-target="#paper-topics-section"
+              hx-swap="innerHTML"
+              hx-confirm="Remove this paper from '{{ t.name }}'?"
+              style="cursor:pointer; font-size:0.75rem; opacity:0.4; line-height:1;"
+              title="Remove from {{ t.name }}">✕</span>
         <span id="tp-icons-{{ t.id }}-{{ paper_id }}" style="display:contents;">
             <span hx-post="/topics/{{ t.id }}/papers/{{ paper_id }}/toggle-seed"
                   hx-target="#tp-icons-{{ t.id }}-{{ paper_id }}" hx-swap="outerHTML"

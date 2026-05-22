@@ -10,6 +10,8 @@
     </ul>
 </nav>
 
+{% include "papers/partials/topic_tabs.html" %}
+
 <!-- Paper Info -->
 <article>
     <header><strong>Paper Info</strong></header>
@@ -26,36 +28,6 @@
 <article>
     <header><strong>Structural Skim</strong></header>
 
-    {% if topics|length > 1 %}
-    <nav style="display:flex; gap:0.25rem; margin-bottom:0.75rem;
-                border-bottom:1px solid var(--pico-card-border-color); padding-bottom:0; flex-wrap:wrap;">
-        {% for t in topics %}
-        <a href="javascript:void(0)"
-           style="padding:0.25rem 0.75rem; text-decoration:none; font-size:0.85rem;
-                  border-radius:0.25rem 0.25rem 0 0; display:inline-block;
-                  {% if t.id == active_topic_id %}
-                  background:var(--pico-primary-background);color:var(--pico-primary-inverse);
-                  font-weight:600;
-                  {% else %}
-                  color:var(--pico-muted-color);
-                  {% endif %}"
-           hx-get="/papers/{{ paper.id }}/structural-skim?topic_id={{ t.id }}"
-           hx-target="#skim-tab-panel"
-           hx-swap="innerHTML"
-           hx-indicator="#skim-tab-ind"
-           hx-push-url="/papers/{{ paper.id }}?topic={{ t.id }}"
-            {{ t.name[:24] }}{% if t.name|length > 24 %}…{% endif %}
-        </a>
-        {% endfor %}
-        <span id="skim-tab-ind" class="htmx-indicator" style="align-self:center; margin-left:0.25rem;">
-            <span class="spinner" style="width:0.75em;height:0.75em;vertical-align:middle;display:inline-block;"></span>
-        </span>
-    </nav>
-    {% elif topics|length == 1 %}
-    <p style="font-size:0.8rem; color:var(--pico-muted-color); margin-bottom:0.5rem;">
-        Topic: <strong>{{ topics[0].name }}</strong>
-    </p>
-    {% endif %}
 
     <div id="skim-tab-panel">
         {% with skim=active_skim, topic_id=active_topic_id, paper_id=paper.id,
@@ -78,35 +50,6 @@
         </small>
     </header>
 
-    {% if topics|length > 1 %}
-    <nav style="display:flex; gap:0.25rem; margin-bottom:0.75rem;
-                border-bottom:1px solid var(--pico-card-border-color); padding-bottom:0; flex-wrap:wrap;">
-        {% for t in topics %}
-        <a href="javascript:void(0)"
-           style="padding:0.25rem 0.75rem; text-decoration:none; font-size:0.85rem;
-                  border-radius:0.25rem 0.25rem 0 0; display:inline-block;
-                  {% if t.id == active_topic_id %}
-                  background:var(--pico-primary-background);color:var(--pico-primary-inverse);font-weight:600;
-                  {% else %}
-                  color:var(--pico-muted-color);
-                  {% endif %}"
-           hx-get="/papers/{{ paper.id }}/deep-synthesis?topic_id={{ t.id }}"
-           hx-target="#deep-tab-panel"
-           hx-swap="innerHTML"
-           hx-indicator="#deep-tab-ind"
-           hx-push-url="/papers/{{ paper.id }}?topic={{ t.id }}"
-            {{ t.name[:24] }}{% if t.name|length > 24 %}…{% endif %}
-        </a>
-        {% endfor %}
-        <span id="deep-tab-ind" class="htmx-indicator" style="align-self:center; margin-left:0.25rem;">
-            <span class="spinner" style="width:0.75em;height:0.75em;vertical-align:middle;display:inline-block;"></span>
-        </span>
-    </nav>
-    {% elif topics|length == 1 %}
-    <p style="font-size:0.8rem; color:var(--pico-muted-color); margin-bottom:0.5rem;">
-        Topic: <strong>{{ topics[0].name }}</strong>
-    </p>
-    {% endif %}
 
     <div id="deep-tab-panel">
         {% with ds=active_skim, topic_id=active_topic_id, paper_id=paper.id,
@@ -361,6 +304,7 @@
     // ---------- Note overlay open/close ----------
     var overlay = document.getElementById('human-note-overlay');
     var _paperId = {{ paper.id }};
+    var _activeTopicId = {{ active_topic_id if active_topic_id is not none else 'null' }};
 
     function openNoteOverlay() {
         var viewContent = document.querySelector('#human-note-view .ql-editor');
@@ -389,7 +333,13 @@
         var btn = this;
         btn.disabled = true;
         btn.textContent = 'Saving…';
-        fetch('/papers/' + _paperId + '/human-note', {
+        if (!_activeTopicId) {
+            showToast('Add this paper to a topic first to save notes', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Save';
+            return;
+        }
+        fetch('/papers/' + _paperId + '/topics/' + _activeTopicId + '/note', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'HX-Request': 'true' },
             body: 'human_note=' + encodeURIComponent(html)

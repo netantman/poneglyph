@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Bump this whenever a destructive migration is added. _migrate() compares against
 # PRAGMA user_version and only runs newer steps, so we don't re-execute migrations
 # on every boot.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 _SCHEMA_SQL = """
 -- Topics: user-defined research areas with keywords, steering, and LLM skill prompts
@@ -78,13 +78,12 @@ CREATE TABLE IF NOT EXISTS paper_citations (
     UNIQUE(from_paper_id, to_paper_id, direction)
 );
 
--- Paper-level notes (shared across topics)
+-- Paper-level notes (metadata only — human notes moved to topic_paper_notes)
 CREATE TABLE IF NOT EXISTS paper_notes (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     paper_id        INTEGER NOT NULL UNIQUE REFERENCES papers(id) ON DELETE CASCADE,
     paper_info      TEXT NOT NULL DEFAULT '{}',          -- JSON
     abstract_excerpt TEXT NOT NULL DEFAULT '',
-    human_note      TEXT,                                -- user annotation, shared across topics
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -112,6 +111,8 @@ CREATE TABLE IF NOT EXISTS topic_paper_notes (
     skim_skill_hash         TEXT NOT NULL DEFAULT '', -- SHA-256 of skill at generation time
     skim_generated_at       TEXT,
     skim_pdf_used           INTEGER NOT NULL DEFAULT 0, -- 1 = PDF sections used; 0 = abstract only
+    -- Per-topic human note (Phase 7)
+    human_note              TEXT,
     -- Deep synthesis (Phase 4)
     deep_synthesis          TEXT,
     deep_synthesis_model_used TEXT NOT NULL DEFAULT '',
@@ -219,6 +220,17 @@ CREATE TABLE IF NOT EXISTS paper_fulltext (
     body_html       TEXT NOT NULL DEFAULT '',
     source          TEXT NOT NULL DEFAULT 'rss_full',  -- 'rss_full' | 'subscriber_rss' | 'manual_paste' | 'pdf_extract'
     cached_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Pending skim queue for bulk add-to-topic (Phase 7)
+CREATE TABLE IF NOT EXISTS pending_skims (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id  INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    paper_id  INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+    queued_at TEXT NOT NULL DEFAULT (datetime('now')),
+    status    TEXT NOT NULL DEFAULT 'pending',           -- 'pending' | 'done' | 'error'
+    error_msg TEXT,
+    UNIQUE(topic_id, paper_id)
 );
 
 -- FTS5 virtual table for full-text keyword search across papers
@@ -363,10 +375,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "not_interesting" not in tp_cols:
         conn.execute("ALTER TABLE topic_papers ADD COLUMN not_interesting INTEGER NOT NULL DEFAULT 0")
 
-    # Add skim_pdf_used to topic_paper_notes if missing
+    # Add skim_pdf_used / skip_reason to topic_paper_notes if missing
     tpn_cols = {row[1] for row in conn.execute("PRAGMA table_info(topic_paper_notes)").fetchall()}
     if "skim_pdf_used" not in tpn_cols:
         conn.execute("ALTER TABLE topic_paper_notes ADD COLUMN skim_pdf_used INTEGER NOT NULL DEFAULT 0")
+    if "skip_reason" not in tpn_cols:
+        conn.execute("ALTER TABLE topic_paper_notes ADD COLUMN skip_reason TEXT NOT NULL DEFAULT ''")
 
     # Add skill columns to topics if missing
     t_cols = {row[1] for row in conn.execute("PRAGMA table_info(topics)").fetchall()}
@@ -559,6 +573,67 @@ def _migrate(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_papers_author_id      ON papers(author_id);
             CREATE INDEX IF NOT EXISTS idx_author_sources_polled ON author_sources(last_polled_at);
         """)
+
+    # ── Schema version 3: per-topic human notes ──────────────────────────────
+    if current < 3:
+        # 1. Add human_note to topic_paper_notes (for existing DBs)
+        tpn_cols_v3 = {row[1] for row in conn.execute("PRAGMA table_info(topic_paper_notes)").fetchall()}
+        if "human_note" not in tpn_cols_v3:
+            conn.execute("ALTER TABLE topic_paper_notes ADD COLUMN human_note TEXT")
+
+        # 2. Backfill: copy paper_notes.human_note → existing topic_paper_notes rows
+        conn.execute("""
+            UPDATE topic_paper_notes
+            SET human_note = (
+                SELECT pn.human_note FROM paper_notes pn
+                WHERE pn.paper_id = topic_paper_notes.paper_id
+                  AND pn.human_note IS NOT NULL AND pn.human_note != ''
+            )
+            WHERE human_note IS NULL OR human_note = ''
+        """)
+
+        # 3. Stub-insert for papers with notes but no topic_paper_notes row yet
+        conn.execute("""
+            INSERT OR IGNORE INTO topic_paper_notes (topic_id, paper_id, human_note)
+            SELECT tp.topic_id, tp.paper_id, pn.human_note
+            FROM topic_papers tp
+            JOIN paper_notes pn ON pn.paper_id = tp.paper_id
+            WHERE pn.human_note IS NOT NULL AND pn.human_note != ''
+        """)
+
+        # 4. Ensure pending_skims table exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pending_skims (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic_id  INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                paper_id  INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+                queued_at TEXT NOT NULL DEFAULT (datetime('now')),
+                status    TEXT NOT NULL DEFAULT 'pending',
+                error_msg TEXT,
+                UNIQUE(topic_id, paper_id)
+            )
+        """)
+
+        # 5. Drop paper_notes.human_note via recreate-table dance
+        pn_cols_v3 = {row[1] for row in conn.execute("PRAGMA table_info(paper_notes)").fetchall()}
+        if "human_note" in pn_cols_v3:
+            _backup_before_migration("drop_paper_notes_human_note")
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS paper_notes_v3 (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    paper_id         INTEGER NOT NULL UNIQUE REFERENCES papers(id) ON DELETE CASCADE,
+                    paper_info       TEXT NOT NULL DEFAULT '{}',
+                    abstract_excerpt TEXT NOT NULL DEFAULT '',
+                    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                INSERT OR IGNORE INTO paper_notes_v3
+                    (id, paper_id, paper_info, abstract_excerpt, created_at, updated_at)
+                SELECT id, paper_id, paper_info, abstract_excerpt, created_at, updated_at
+                FROM paper_notes;
+                DROP TABLE paper_notes;
+                ALTER TABLE paper_notes_v3 RENAME TO paper_notes;
+            """)
 
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()

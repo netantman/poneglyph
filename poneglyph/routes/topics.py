@@ -221,6 +221,68 @@ async def update_topic(
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
+# ---------- Inline skill editing ----------
+
+_VALID_SKILLS = {"skim", "deep"}
+
+
+def _skill_col(skill_name: str) -> str:
+    return "skim_skill_md" if skill_name == "skim" else "deep_synthesis_skill_md"
+
+
+@router.get("/{topic_id}/skills/{skill_name}/edit", response_class=HTMLResponse)
+async def edit_skill_form(request: Request, topic_id: int, skill_name: str):
+    if skill_name not in _VALID_SKILLS:
+        return HTMLResponse("", status_code=404)
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "topics/partials/skill_editor.html",
+        {"request": request, "topic": topic, "skill_name": skill_name, "editing": True},
+    )
+
+
+@router.get("/{topic_id}/skills/{skill_name}/view", response_class=HTMLResponse)
+async def view_skill(request: Request, topic_id: int, skill_name: str):
+    if skill_name not in _VALID_SKILLS:
+        return HTMLResponse("", status_code=404)
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "topics/partials/skill_editor.html",
+        {"request": request, "topic": topic, "skill_name": skill_name, "editing": False},
+    )
+
+
+@router.put("/{topic_id}/skills/{skill_name}", response_class=HTMLResponse)
+async def update_skill(
+    request: Request,
+    topic_id: int,
+    skill_name: str,
+    skill_md: str = Form(""),
+):
+    if skill_name not in _VALID_SKILLS:
+        return HTMLResponse("", status_code=404)
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("", status_code=404)
+    col = _skill_col(skill_name)
+    execute(
+        f"UPDATE topics SET {col} = ?, updated_at = datetime('now') WHERE id = ?",
+        (skill_md.strip() or None, topic_id),
+    )
+    topic = _topic_row(topic_id)
+    label = "Skim" if skill_name == "skim" else "Deep"
+    resp = templates.TemplateResponse(
+        "topics/partials/skill_editor.html",
+        {"request": request, "topic": topic, "skill_name": skill_name, "editing": False},
+    )
+    resp.headers.update(_toast_headers(f"{label} skill updated"))
+    return resp
+
+
 # ---------- Delete topic ----------
 
 @router.delete("/{topic_id}", response_class=HTMLResponse)
@@ -455,10 +517,10 @@ async def suggest_steering(request: Request, topic_id: int):
         return HTMLResponse("<p>Topic not found.</p>", status_code=404)
 
     note_rows = fetch_all(
-        """SELECT p.title, pn.human_note AS note
+        """SELECT p.title, tpn.human_note AS note
            FROM papers p
            JOIN topic_papers tp ON p.id = tp.paper_id
-           LEFT JOIN paper_notes pn ON pn.paper_id = p.id
+           LEFT JOIN topic_paper_notes tpn ON tpn.topic_id = tp.topic_id AND tpn.paper_id = p.id
            WHERE tp.topic_id = ?
            ORDER BY p.published_date DESC""",
         (topic_id,),
@@ -609,10 +671,9 @@ async def _run_cross_synthesis(topic_id: int, run_id: int) -> None:
 
         # Fetch papers + their best skim + human notes
         paper_rows = fetch_all(
-            """SELECT p.*, pn.human_note
+            """SELECT p.*
                FROM papers p
                JOIN topic_papers tp ON p.id = tp.paper_id
-               LEFT JOIN paper_notes pn ON pn.paper_id = p.id
                WHERE tp.topic_id = ?
                ORDER BY COALESCE(tp.relevance_score, 0.0) DESC""",
             (topic_id,),
@@ -636,7 +697,7 @@ async def _run_cross_synthesis(topic_id: int, run_id: int) -> None:
             paper_notes.append({
                 "paper": p,
                 "skim": skim,
-                "human_note": p.get("human_note"),
+                "human_note": skim.get("human_note") if skim else None,
             })
 
         synthesis, directions = await cross_synthesize(topic, paper_notes)

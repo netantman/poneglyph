@@ -334,7 +334,7 @@ async def upload_paper(
                 meta_source_msg = "DOI resolved from title"
 
     # If title still missing after LLM and we have a PDF, re-render form with inline prompt
-    if not title and pdf_tmp_path:
+    if not title and (pdf_tmp_path or linked_pdf_path):
         all_topics = [row_to_dict(r) for r in fetch_all("SELECT id, name FROM topics ORDER BY name")]
         subfolders = list_subfolders()
         all_pdf_files = list_all_pdf_files()
@@ -347,6 +347,7 @@ async def upload_paper(
                 "subfolders": subfolders,
                 "all_pdf_files": all_pdf_files,
                 "pdf_tmp_id": pdf_tmp_id,
+                "pdf_linked_relpath": pdf_existing_relpath.strip() if linked_pdf_path else "",
                 "pdf_subfolder_selected": pdf_subfolder.strip(),
                 "llm_message": (
                     "Could not extract the title from the PDF automatically. "
@@ -445,10 +446,15 @@ async def upload_paper(
             from poneglyph.services.relevance import update_paper_all_topic_scores
             update_paper_all_topic_scores(paper_id, paper_row)
         from poneglyph.pipeline import _synthesize_paper
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
         for tid in newly_linked_topic_ids:
             topic_row = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (tid,)))
             if topic_row and topic_row.get("skim_skill_md"):
-                await _synthesize_paper(paper_id, topic_row)
+                try:
+                    await _synthesize_paper(paper_id, topic_row)
+                except Exception as _exc:
+                    _log.warning("auto-skim failed for paper=%d topic=%d: %s", paper_id, tid, _exc)
 
     if request.headers.get("HX-Request"):
         resp = HTMLResponse("")
@@ -461,26 +467,18 @@ async def upload_paper(
 
 # ---------- Paper detail ----------
 
-@router.get("/{paper_id}", response_class=HTMLResponse)
-async def view_paper(request: Request, paper_id: int, topic: int | None = None):
-    paper = _get_paper(paper_id)
-    if not paper:
-        return HTMLResponse("<p>Paper not found.</p>", status_code=404)
-
+def _paper_detail_context(request: Request, paper: dict, paper_id: int, active_topic_id: int | None) -> dict:
+    """Build the full template context for a paper detail page."""
+    import hashlib
     _ensure_paper_note(paper_id)
     note = _get_paper_note(paper_id)
     topics = _get_paper_topics(paper_id)
 
-    import hashlib
-
-    # Determine active topic for per-topic skim display
-    active_topic_id: int | None = None
     active_skim: dict | None = None
     active_topic: dict | None = None
     skim_skill_hash: str = ""
     deep_skill_hash: str = ""
-    if topics:
-        active_topic_id = topic if topic and any(t["id"] == topic for t in topics) else topics[0]["id"]
+    if active_topic_id:
         active_skim = _get_topic_paper_note(active_topic_id, paper_id)
         active_topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (active_topic_id,)))
         if active_topic:
@@ -494,25 +492,59 @@ async def view_paper(request: Request, paper_id: int, topic: int | None = None):
     all_topics = [row_to_dict(r) for r in fetch_all("SELECT id, name FROM topics ORDER BY name")]
     linked_topic_ids = {t["id"] for t in topics}
     topic_has_skill = bool(active_topic and active_topic.get("skim_skill_md"))
+    topic_note = active_skim.get("human_note") if active_skim else None
 
-    return templates.TemplateResponse(
-        "papers/detail.html",
-        {
-            "request": request,
-            "paper": paper,
-            "paper_id": paper_id,
-            "note": note,
-            "topics": topics,
-            "active_topic_id": active_topic_id,
-            "active_skim": active_skim,
-            "active_topic": active_topic,
-            "skim_skill_hash": skim_skill_hash,
-            "deep_skill_hash": deep_skill_hash,
-            "topic_has_skill": topic_has_skill,
-            "all_topics": all_topics,
-            "linked_topic_ids": linked_topic_ids,
-        },
-    )
+    return {
+        "request": request,
+        "paper": paper,
+        "paper_id": paper_id,
+        "note": note,
+        "topic_note": topic_note,
+        "topics": topics,
+        "active_topic_id": active_topic_id,
+        "active_skim": active_skim,
+        "active_topic": active_topic,
+        "skim_skill_hash": skim_skill_hash,
+        "deep_skill_hash": deep_skill_hash,
+        "topic_has_skill": topic_has_skill,
+        "all_topics": all_topics,
+        "linked_topic_ids": linked_topic_ids,
+    }
+
+
+@router.get("/{paper_id}/topics/{topic_id}", response_class=HTMLResponse)
+async def view_paper_for_topic(request: Request, paper_id: int, topic_id: int):
+    """Canonical per-topic paper detail page."""
+    paper = _get_paper(paper_id)
+    if not paper:
+        return HTMLResponse("<p>Paper not found.</p>", status_code=404)
+
+    topics = _get_paper_topics(paper_id)
+    # If this topic isn't linked, redirect to first valid topic (or bare paper page)
+    if not any(t["id"] == topic_id for t in topics):
+        if topics:
+            return RedirectResponse(f"/papers/{paper_id}/topics/{topics[0]['id']}", status_code=302)
+        return RedirectResponse(f"/papers/{paper_id}", status_code=302)
+
+    ctx = _paper_detail_context(request, paper, paper_id, topic_id)
+    return templates.TemplateResponse("papers/detail.html", ctx)
+
+
+@router.get("/{paper_id}", response_class=HTMLResponse)
+async def view_paper(request: Request, paper_id: int, topic: int | None = None):
+    """Redirect to per-topic canonical URL; render shell page if paper has no topics."""
+    paper = _get_paper(paper_id)
+    if not paper:
+        return HTMLResponse("<p>Paper not found.</p>", status_code=404)
+
+    topics = _get_paper_topics(paper_id)
+    if topics:
+        target_tid = topic if topic and any(t["id"] == topic for t in topics) else topics[0]["id"]
+        return RedirectResponse(f"/papers/{paper_id}/topics/{target_tid}", status_code=302)
+
+    # Shell mode: paper exists but has no topics
+    ctx = _paper_detail_context(request, paper, paper_id, None)
+    return templates.TemplateResponse("papers/detail.html", ctx)
 
 
 # ---------- Delete paper ----------
@@ -654,6 +686,169 @@ async def generate_structural_skim(request: Request, paper_id: int, topic_id: in
     )
 
 
+# ---------- Per-topic structural skim routes (canonical URL) ----------
+
+@router.get("/{paper_id}/topics/{topic_id}/structural-skim", response_class=HTMLResponse)
+async def get_structural_skim_tab_v2(request: Request, paper_id: int, topic_id: int):
+    return await get_structural_skim_tab(request, paper_id, topic_id=topic_id)
+
+
+@router.post("/{paper_id}/topics/{topic_id}/structural-skim", response_class=HTMLResponse)
+async def generate_structural_skim_v2(request: Request, paper_id: int, topic_id: int):
+    """Generate skim with topic_id from path (new canonical route)."""
+    import hashlib
+    from poneglyph.pipeline import _synthesize_paper
+
+    paper = _get_paper(paper_id)
+    if not paper:
+        return HTMLResponse('<p style="color:var(--pico-del-color);">Paper not found.</p>', status_code=404)
+
+    topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+    if not topic:
+        return HTMLResponse('<p style="color:var(--pico-del-color);">Topic not found.</p>', status_code=404)
+
+    skill_md = topic.get("skim_skill_md") or ""
+    skill_hash = hashlib.sha256(skill_md.encode()).hexdigest()
+    skim_ctx = {
+        "request": request, "topic_id": topic_id, "paper_id": paper_id,
+        "current_skill_hash": skill_hash, "topic_has_skill": bool(skill_md),
+        "topic_name": topic.get("name") or "", "skim_skill_md": skill_md,
+    }
+
+    synthesis_error = await _synthesize_paper(paper_id, topic)
+    existing_skim = _get_topic_paper_note(topic_id, paper_id)
+    if synthesis_error:
+        return templates.TemplateResponse(
+            "papers/partials/structural_skim.html",
+            {**skim_ctx, "skim": existing_skim, "synthesis_error": synthesis_error},
+        )
+    return templates.TemplateResponse(
+        "papers/partials/structural_skim.html",
+        {**skim_ctx, "skim": existing_skim},
+        headers=_toast_headers("Structural skim generated"),
+    )
+
+
+# ---------- Per-topic deep synthesis routes (canonical URL) ----------
+
+@router.get("/{paper_id}/topics/{topic_id}/deep-synthesis", response_class=HTMLResponse)
+async def get_deep_synthesis_tab_v2(request: Request, paper_id: int, topic_id: int):
+    return await get_deep_synthesis_tab(request, paper_id, topic_id=topic_id)
+
+
+@router.post("/{paper_id}/topics/{topic_id}/deep-synthesis", response_class=HTMLResponse)
+async def generate_deep_synthesis_v2(
+    request: Request,
+    paper_id: int,
+    topic_id: int,
+    model_choice: str = Form("sonnet"),
+):
+    """Generate deep synthesis with topic_id from path (new canonical route)."""
+    import hashlib
+    from poneglyph.services.llm_deep import deep_synthesize, extract_pdf_text
+    from poneglyph.pipeline import _ensure_topic_paper_note, _skill_hash
+
+    paper = _get_paper(paper_id)
+    if not paper:
+        return _deep_error("Paper not found.")
+
+    topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+    if not topic:
+        return _deep_error("Topic not found.")
+
+    if not topic.get("deep_synthesis_skill_md"):
+        return _deep_error("Upload a Deep Synthesis skill for this topic first.")
+
+    model_id = settings.opus_model if model_choice == "opus" else settings.sonnet_model
+
+    pdf_path = (paper.get("pdf_local_path") or "").strip()
+    if not pdf_path:
+        return _deep_error("No PDF linked. Upload or link a local PDF on this paper's detail page first.")
+    if pdf_path.startswith("http://") or pdf_path.startswith("https://"):
+        return _deep_error("PDF is a remote URL — please download and link a local copy first.")
+
+    pdf_text, pdf_err = extract_pdf_text(pdf_path)
+    pdf_bytes: bytes | None = None
+    if pdf_err:
+        try:
+            pdf_bytes = Path(pdf_path).read_bytes()
+        except OSError as exc:
+            return _deep_error(f"Cannot read PDF: {exc}")
+
+    note_rows = fetch_all(
+        """SELECT tpn.human_note FROM topic_paper_notes tpn
+           WHERE tpn.topic_id = ? AND tpn.paper_id != ?
+             AND tpn.human_note IS NOT NULL AND tpn.human_note != ''
+           ORDER BY tpn.id DESC LIMIT 3""",
+        (topic_id, paper_id),
+    )
+    related_notes = [r["human_note"] for r in note_rows]
+
+    try:
+        synthesis = await deep_synthesize(
+            paper, topic, pdf_text, related_notes, model=model_id, pdf_bytes=pdf_bytes
+        )
+    except ValueError as exc:
+        return _deep_error(str(exc))
+
+    _ensure_topic_paper_note(topic_id, paper_id)
+    sh = _skill_hash(topic.get("deep_synthesis_skill_md"))
+    execute(
+        """UPDATE topic_paper_notes
+           SET deep_synthesis = ?, deep_synthesis_model_used = ?,
+               deep_skill_hash = ?, deep_generated_at = datetime('now')
+           WHERE topic_id = ? AND paper_id = ?""",
+        (synthesis, model_id, sh, topic_id, paper_id),
+    )
+
+    skill_md = topic.get("deep_synthesis_skill_md") or ""
+    ds = _get_topic_paper_note(topic_id, paper_id)
+    current_hash = hashlib.sha256(skill_md.encode()).hexdigest()
+    return templates.TemplateResponse(
+        "papers/partials/deep_synthesis.html",
+        {
+            "request": request, "ds": ds, "topic_id": topic_id, "paper_id": paper_id,
+            "current_skill_hash": current_hash,
+            "topic_has_deep_skill": bool(skill_md),
+            "deep_skill_md": skill_md,
+        },
+        headers=_toast_headers(f"Deep synthesis complete ({model_id})"),
+    )
+
+
+# ---------- Per-topic human note routes ----------
+
+@router.get("/{paper_id}/topics/{topic_id}/note", response_class=HTMLResponse)
+async def get_note_panel(request: Request, paper_id: int, topic_id: int):
+    tpn = _get_topic_paper_note(topic_id, paper_id)
+    topic_note = tpn.get("human_note") if tpn else None
+    return templates.TemplateResponse(
+        "papers/partials/human_note.html",
+        {"request": request, "paper_id": paper_id, "topic_id": topic_id, "topic_note": topic_note},
+    )
+
+
+@router.put("/{paper_id}/topics/{topic_id}/note", response_class=HTMLResponse)
+async def update_topic_note(
+    request: Request, paper_id: int, topic_id: int, human_note: str = Form("")
+):
+    from poneglyph.pipeline import _ensure_topic_paper_note
+    _ensure_topic_paper_note(topic_id, paper_id)
+    stored = human_note if human_note not in ("", "<p><br></p>") else None
+    execute(
+        "UPDATE topic_paper_notes SET human_note = ? WHERE topic_id = ? AND paper_id = ?",
+        (stored, topic_id, paper_id),
+    )
+    tpn = _get_topic_paper_note(topic_id, paper_id)
+    topic_note = tpn.get("human_note") if tpn else None
+    resp = templates.TemplateResponse(
+        "papers/partials/human_note.html",
+        {"request": request, "paper_id": paper_id, "topic_id": topic_id, "topic_note": topic_note},
+    )
+    resp.headers.update(_toast_headers("Note saved"))
+    return resp
+
+
 # ---------- Deep synthesis routes ----------
 
 def _deep_error(msg: str) -> HTMLResponse:
@@ -728,11 +923,10 @@ async def generate_deep_synthesis(
 
     # --- Gather context notes ---
     note_rows = fetch_all(
-        """SELECT pn.human_note FROM paper_notes pn
-           JOIN topic_papers tp ON tp.paper_id = pn.paper_id
-           WHERE tp.topic_id = ? AND pn.paper_id != ?
-           AND pn.human_note IS NOT NULL AND pn.human_note != ''
-           ORDER BY pn.updated_at DESC LIMIT 3""",
+        """SELECT tpn.human_note FROM topic_paper_notes tpn
+           WHERE tpn.topic_id = ? AND tpn.paper_id != ?
+             AND tpn.human_note IS NOT NULL AND tpn.human_note != ''
+           ORDER BY tpn.id DESC LIMIT 3""",
         (topic_id, paper_id),
     )
     related_notes = [r["human_note"] for r in note_rows]
@@ -1062,23 +1256,13 @@ async def save_pdf_to_desktop(paper_id: int):
     return resp
 
 
-# ---------- Human note update ----------
+# ---------- Human note update (legacy redirect — use /topics/{tid}/note) ----------
 
 @router.put("/{paper_id}/human-note", response_class=HTMLResponse)
-async def update_human_note(request: Request, paper_id: int, human_note: str = Form("")):
-    _ensure_paper_note(paper_id)
-    # Store raw HTML from Quill; treat empty-editor sentinel as blank
-    stored = human_note if human_note not in ("", "<p><br></p>") else None
-    execute(
-        "UPDATE paper_notes SET human_note = ?, updated_at = datetime('now') WHERE paper_id = ?",
-        (stored, paper_id),
-    )
-    note = _get_paper_note(paper_id)
-    resp = templates.TemplateResponse(
-        "papers/partials/human_note.html",
-        {"request": request, "paper_id": paper_id, "note": note},
-    )
-    resp.headers.update(_toast_headers("Note saved"))
+async def update_human_note_legacy(request: Request, paper_id: int):
+    """Legacy endpoint — kept for any in-flight requests; returns an error nudging the new URL."""
+    resp = HTMLResponse("")
+    resp.headers.update(_toast_headers("Reload the page and try again", "error"))
     return resp
 
 
@@ -1114,8 +1298,40 @@ async def add_to_topic(request: Request, paper_id: int, topic_id: int = Form(...
         from poneglyph.pipeline import _synthesize_paper
         await _synthesize_paper(paper_id, topic_row)
 
-    # Full redirect so the skim/deep-synthesis panels re-render with the new topic active
+    # Full redirect to the new per-topic canonical URL
     resp = HTMLResponse("")
-    resp.headers["HX-Redirect"] = f"/papers/{paper_id}?topic={topic_id}"
+    resp.headers["HX-Redirect"] = f"/papers/{paper_id}/topics/{topic_id}"
     resp.headers.update(_toast_headers(f"Added to '{topic_name}'"))
+    return resp
+
+
+@router.post("/{paper_id}/remove-from-topic", response_class=HTMLResponse)
+async def remove_from_topic(request: Request, paper_id: int, topic_id: int = Form(...)):
+    paper = _get_paper(paper_id)
+    if not paper:
+        return HTMLResponse("<p>Paper not found.</p>", status_code=404)
+
+    topic_row = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+    topic_name = topic_row["name"] if topic_row else "topic"
+
+    execute(
+        "DELETE FROM topic_papers WHERE topic_id = ? AND paper_id = ?",
+        (topic_id, paper_id),
+    )
+
+    topics = _get_paper_topics(paper_id)
+    all_topics = [row_to_dict(r) for r in fetch_all("SELECT id, name FROM topics ORDER BY name")]
+    linked_topic_ids = {t["id"] for t in topics}
+
+    resp = templates.TemplateResponse(
+        "papers/partials/paper_topics.html",
+        {
+            "request": request,
+            "topics": topics,
+            "all_topics": all_topics,
+            "linked_topic_ids": linked_topic_ids,
+            "paper_id": paper_id,
+        },
+    )
+    resp.headers.update(_toast_headers(f"Removed from '{topic_name}'"))
     return resp

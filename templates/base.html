@@ -294,6 +294,15 @@
             showToast(detail.message || 'Done', detail.type || 'success');
         });
 
+        // Surface htmx errors as toasts instead of silent failures
+        document.body.addEventListener('htmx:responseError', function(e) {
+            var status = e.detail && e.detail.xhr ? e.detail.xhr.status : 0;
+            showToast('Server error (' + status + ') — check logs', 'error');
+        });
+        document.body.addEventListener('htmx:sendError', function() {
+            showToast('Request failed — check your connection', 'error');
+        });
+
         // Render all [data-md] elements with marked.js (on load and after htmx swaps)
         function renderMdElements(root) {
             (root || document).querySelectorAll('[data-md]').forEach(function(el) {

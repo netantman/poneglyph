@@ -1,0 +1,63 @@
+{% set is_skim = skill_name == "skim" %}
+{% set skill_value = topic.skim_skill_md if is_skim else topic.deep_synthesis_skill_md %}
+{% set skill_label = "Skim Skill" %}
+{% set skill_hint = "(Haiku)" %}
+{% if not is_skim %}
+    {% set skill_label = "Deep Skill" %}
+    {% set skill_hint = "(Sonnet / Opus)" %}
+{% endif %}
+{% set editor_id = "skim" if is_skim else "deep" %}
+
+<div id="skill-editor-{{ editor_id }}-{{ topic.id }}">
+{% if editing %}
+<form hx-put="/topics/{{ topic.id }}/skills/{{ skill_name }}"
+      hx-target="#skill-editor-{{ editor_id }}-{{ topic.id }}"
+      hx-swap="outerHTML"
+      style="margin:0;">
+    <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.4rem;">
+        <strong>{{ skill_label }}</strong>
+        <small style="color:var(--pico-muted-color);">{{ skill_hint }}</small>
+        <label style="margin:0; font-size:0.82rem; white-space:nowrap; display:flex; align-items:center; gap:0.35rem;">
+            Upload .md:
+            <input type="file" accept=".md" style="margin:0; font-size:0.82rem;"
+                   onchange="loadSkillFileDirect(this, 'skill-ta-{{ editor_id }}-{{ topic.id }}')">
+        </label>
+    </div>
+    <textarea id="skill-ta-{{ editor_id }}-{{ topic.id }}" name="skill_md" rows="12"
+              style="font-family:monospace; font-size:0.82rem; width:100%;"
+              placeholder="Paste skill prompt here (Markdown)…">{{ skill_value or '' }}</textarea>
+    <div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+        <button type="submit" style="margin:0; width:auto;">Save</button>
+        <button type="button" class="outline secondary" style="margin:0; width:auto;"
+                hx-get="/topics/{{ topic.id }}/skills/{{ skill_name }}/view"
+                hx-target="#skill-editor-{{ editor_id }}-{{ topic.id }}"
+                hx-swap="outerHTML">Cancel</button>
+    </div>
+</form>
+<script>
+function loadSkillFileDirect(input, taId) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => { document.getElementById(taId).value = e.target.result; };
+    reader.readAsText(file);
+}
+</script>
+{% else %}
+<p style="margin-bottom:0.25rem;">
+    <strong>{{ skill_label }}:</strong>
+    {% if skill_value %}
+        <span style="color:#16a34a; font-size:0.85rem;">✓ Custom</span>
+    {% elif is_skim %}
+        <span style="color:#dc2626; font-size:0.85rem;">✗ None — scouting disabled</span>
+    {% else %}
+        <span style="color:var(--pico-muted-color); font-size:0.85rem;">✗ None — deep synthesis disabled</span>
+    {% endif %}
+    <button class="outline secondary"
+            style="font-size:0.75rem; padding:0.1rem 0.45rem; margin-left:0.5rem; margin-bottom:0; width:auto;"
+            hx-get="/topics/{{ topic.id }}/skills/{{ skill_name }}/edit"
+            hx-target="#skill-editor-{{ editor_id }}-{{ topic.id }}"
+            hx-swap="outerHTML">{{ 'Edit' if skill_value else 'Add' }}</button>
+</p>
+{% endif %}
+</div>

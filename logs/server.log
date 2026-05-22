@@ -1,0 +1,1055 @@
+INFO:     Started server process [32060]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59951 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61141 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61141 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57356 - "POST /papers/upload HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 420, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\source\repos\poneglyph\poneglyph\routes\papers.py", line 417, in upload_paper
+    dest = save_pdf(pdf_content, pdf_subfolder.strip(), filename)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\source\repos\poneglyph\poneglyph\services\pdf_manager.py", line 93, in save_pdf
+    dest.write_bytes(content)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\pathlib.py", line 1067, in write_bytes
+    with self.open(mode='wb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\zhong\\OneDrive\\Papers, Presentation, Reports and Slides\\Public-Academia\\Aziz and Zarattini (2025), Can Day Trading Really Be Profitable_ Evidence of Sustainable Long-term Profits from Opening Range Breakout (ORB) Day Trading Strategy vs. Benchmark in the US Stock Market.pdf'
+INFO:     127.0.0.1:49690 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49690 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51039 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51039 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56355 - "POST /papers/upload HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 420, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\source\repos\poneglyph\poneglyph\routes\papers.py", line 417, in upload_paper
+    dest = save_pdf(pdf_content, pdf_subfolder.strip(), filename)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\source\repos\poneglyph\poneglyph\services\pdf_manager.py", line 93, in save_pdf
+    dest.write_bytes(content)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\pathlib.py", line 1067, in write_bytes
+    with self.open(mode='wb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\zhong\\OneDrive\\Papers, Presentation, Reports and Slides\\Public-Academia\\Aziz and Zarattini (2025), Can Day Trading Really Be Profitable_ Evidence of Sustainable Long-term Profits from Opening Range Breakout (ORB) Day Trading Strategy vs. Benchmark in the US Stock Market.pdf'
+INFO:     Started server process [27700]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62174 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62174 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62174 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62174 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51161 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51161 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 10301.24it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+INFO:     127.0.0.1:51161 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51161 - "GET /papers/295 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51161 - "GET /papers/295/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53614 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53614 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53614 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53614 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51108 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51108 - "GET /topics/7/papers-list?q=has HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51108 - "GET /papers/217 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51108 - "GET /papers/217/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61636 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61636 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51813 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51813 - "GET /topics/7/papers-list?q=s HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51813 - "GET /topics/7/papers-list?q=srin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51813 - "GET /topics/7/papers-list?q=srinivas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q=cr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q=cra HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q=crabel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q=za HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q=zara HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58744 - "GET /topics/7/papers-list?q=gao HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50584 - "GET /topics/7/papers-list?q=gatev HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51600 - "GET /topics/7/papers-list?q=mak HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53366 - "GET /topics/7/papers-list?q= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53366 - "GET /topics/7/papers-list?q=lillo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60735 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "GET /papers/296 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:53000 - "GET /papers/296/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "POST /topics/7/papers/296/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "POST /papers/296/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63345 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56958 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51922 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51922 - "GET /papers/297 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51922 - "GET /papers/297/topics/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57309 - "POST /topics/6/papers/297/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57309 - "POST /papers/297/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62776 - "GET /topics/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62776 - "GET /topics/6/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57362 - "GET /topics/6/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56953 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56953 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56953 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56953 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+extract_skim_sections: could not read C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\Public-Academia\LEUNG and LI (2015), OPTIMAL MEAN REVERSION TRADING WITH TRANSACTION COSTS AND STOP-LOSS EXIT.pdf: unsupported operand type(s) for +: 'float' and 'IndirectObject'
+INFO:     127.0.0.1:61909 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /papers/298 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:61909 - "GET /papers/298/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52496 - "GET /papers/298/info?edit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52267 - "POST /topics/7/papers/298/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56246 - "PUT /papers/298/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56246 - "POST /papers/298/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56246 - "GET /papers/298/info?edit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59065 - "PUT /papers/298/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59065 - "GET /papers/298/info?edit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59065 - "PUT /papers/298/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49720 - "GET /papers/298/info?edit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58149 - "PUT /papers/298/info HTTP/1.1" 200 OK
+extract_pdf_text: unexpected error for C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\Public-Academia\Leung and Li (2015), Optimal Mean Reversion Trading with Transaction Costs and Stop-Loss Exit.pdf: unsupported operand type(s) for +: 'float' and 'IndirectObject'
+INFO:     127.0.0.1:58149 - "POST /papers/298/topics/7/deep-synthesis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52864 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52864 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50121 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50121 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52640 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51494 - "GET /papers/299 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51494 - "GET /papers/299/topics/7 HTTP/1.1" 200 OK
+INFO:     Started server process [33300]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:63431 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63431 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63431 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57104 - "GET /papers?q=R&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57104 - "GET /papers?q=Ro&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57104 - "GET /papers?q=Rossi&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57104 - "GET /papers/253 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:57104 - "GET /papers/253/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64722 - "GET /papers?q=te&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64722 - "GET /papers?q=technical&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64722 - "GET /papers/254 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:64722 - "GET /papers/254/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62175 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62175 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62175 - "GET /papers?q=Do%20Demand%20Curves%20for%20Stocks%20Slope%20Down&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62175 - "GET /papers/267 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:62175 - "GET /papers/267/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58667 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58667 - "GET /papers/upload HTTP/1.1" 200 OK
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 20 65536 (offset 0)
+Ignoring wrong pointing object 25 65536 (offset 0)
+Ignoring wrong pointing object 30 65536 (offset 0)
+Ignoring wrong pointing object 35 65536 (offset 0)
+Ignoring wrong pointing object 40 65536 (offset 0)
+Ignoring wrong pointing object 45 65536 (offset 0)
+Ignoring wrong pointing object 50 65536 (offset 0)
+Ignoring wrong pointing object 55 65536 (offset 0)
+Ignoring wrong pointing object 60 65536 (offset 0)
+Ignoring wrong pointing object 65 65536 (offset 0)
+Ignoring wrong pointing object 70 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 80 65536 (offset 0)
+Ignoring wrong pointing object 85 65536 (offset 0)
+INFO:     127.0.0.1:54465 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54465 - "GET /papers/300 HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 6758.44it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 20 65536 (offset 0)
+Ignoring wrong pointing object 25 65536 (offset 0)
+Ignoring wrong pointing object 30 65536 (offset 0)
+Ignoring wrong pointing object 35 65536 (offset 0)
+Ignoring wrong pointing object 40 65536 (offset 0)
+Ignoring wrong pointing object 45 65536 (offset 0)
+Ignoring wrong pointing object 50 65536 (offset 0)
+Ignoring wrong pointing object 55 65536 (offset 0)
+Ignoring wrong pointing object 60 65536 (offset 0)
+Ignoring wrong pointing object 65 65536 (offset 0)
+Ignoring wrong pointing object 70 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 80 65536 (offset 0)
+Ignoring wrong pointing object 85 65536 (offset 0)
+INFO:     127.0.0.1:54465 - "POST /papers/300/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54465 - "GET /papers/300/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50344 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50344 - "GET /papers?q=stati&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50344 - "GET /papers?q=statistical&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50344 - "GET /papers?q=statistica&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50344 - "GET /papers?q=&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50344 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55849 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55849 - "GET /papers/301 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55849 - "POST /papers/301/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55849 - "GET /papers/301/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49675 - "POST /papers/301/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49675 - "GET /papers/301/topics/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54341 - "POST /papers/301/remove-from-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58542 - "PUT /papers/301/topics/5/note HTTP/1.1" 200 OK
+INFO:     Started server process [38328]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61786 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61786 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50125 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50125 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50125 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54610 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53691 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 4468.53it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+INFO:     127.0.0.1:55281 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55281 - "GET /papers/302 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:55281 - "GET /papers/302/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58868 - "POST /topics/7/papers/302/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58926 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58926 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51770 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51770 - "GET /papers/upload?topic_id=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60220 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60220 - "GET /papers/222 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60220 - "GET /papers/222/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers?q=a&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers?q=avv&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers?q=av&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers?q=ave&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers?q=avell&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers?q=avellaneda&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58354 - "GET /papers/119 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:58354 - "GET /papers/119/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56785 - "PUT /papers/119/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63940 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63940 - "GET /papers?q=Measuring%20the%20Information%20Content%20of%20Stock%20Trades&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63940 - "GET /papers/upload HTTP/1.1" 200 OK
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 29 65536 (offset 0)
+Ignoring wrong pointing object 39 65536 (offset 0)
+Ignoring wrong pointing object 47 65536 (offset 0)
+Ignoring wrong pointing object 61 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 91 65536 (offset 0)
+Ignoring wrong pointing object 111 65536 (offset 0)
+Ignoring wrong pointing object 125 65536 (offset 0)
+Ignoring wrong pointing object 147 65536 (offset 0)
+Ignoring wrong pointing object 163 65536 (offset 0)
+Ignoring wrong pointing object 177 65536 (offset 0)
+Ignoring wrong pointing object 187 65536 (offset 0)
+Ignoring wrong pointing object 193 65536 (offset 0)
+Ignoring wrong pointing object 207 65536 (offset 0)
+Ignoring wrong pointing object 223 65536 (offset 0)
+Ignoring wrong pointing object 241 65536 (offset 0)
+Ignoring wrong pointing object 255 65536 (offset 0)
+Ignoring wrong pointing object 271 65536 (offset 0)
+Ignoring wrong pointing object 285 65536 (offset 0)
+Ignoring wrong pointing object 305 65536 (offset 0)
+Ignoring wrong pointing object 319 65536 (offset 0)
+Ignoring wrong pointing object 331 65536 (offset 0)
+Ignoring wrong pointing object 345 65536 (offset 0)
+Ignoring wrong pointing object 363 65536 (offset 0)
+Ignoring wrong pointing object 385 65536 (offset 0)
+Ignoring wrong pointing object 397 65536 (offset 0)
+Ignoring wrong pointing object 421 65536 (offset 0)
+Ignoring wrong pointing object 437 65536 (offset 0)
+Ignoring wrong pointing object 447 65536 (offset 0)
+Ignoring wrong pointing object 461 65536 (offset 0)
+Ignoring wrong pointing object 471 65536 (offset 0)
+Ignoring wrong pointing object 480 65536 (offset 0)
+Ignoring wrong pointing object 490 65536 (offset 0)
+Ignoring wrong pointing object 500 65536 (offset 0)
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 29 65536 (offset 0)
+Ignoring wrong pointing object 39 65536 (offset 0)
+Ignoring wrong pointing object 47 65536 (offset 0)
+Ignoring wrong pointing object 61 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 91 65536 (offset 0)
+Ignoring wrong pointing object 111 65536 (offset 0)
+Ignoring wrong pointing object 125 65536 (offset 0)
+Ignoring wrong pointing object 147 65536 (offset 0)
+Ignoring wrong pointing object 163 65536 (offset 0)
+Ignoring wrong pointing object 177 65536 (offset 0)
+Ignoring wrong pointing object 187 65536 (offset 0)
+Ignoring wrong pointing object 193 65536 (offset 0)
+Ignoring wrong pointing object 207 65536 (offset 0)
+Ignoring wrong pointing object 223 65536 (offset 0)
+Ignoring wrong pointing object 241 65536 (offset 0)
+Ignoring wrong pointing object 255 65536 (offset 0)
+Ignoring wrong pointing object 271 65536 (offset 0)
+Ignoring wrong pointing object 285 65536 (offset 0)
+Ignoring wrong pointing object 305 65536 (offset 0)
+Ignoring wrong pointing object 319 65536 (offset 0)
+Ignoring wrong pointing object 331 65536 (offset 0)
+Ignoring wrong pointing object 345 65536 (offset 0)
+Ignoring wrong pointing object 363 65536 (offset 0)
+Ignoring wrong pointing object 385 65536 (offset 0)
+Ignoring wrong pointing object 397 65536 (offset 0)
+Ignoring wrong pointing object 421 65536 (offset 0)
+Ignoring wrong pointing object 437 65536 (offset 0)
+Ignoring wrong pointing object 447 65536 (offset 0)
+Ignoring wrong pointing object 461 65536 (offset 0)
+Ignoring wrong pointing object 471 65536 (offset 0)
+Ignoring wrong pointing object 480 65536 (offset 0)
+Ignoring wrong pointing object 490 65536 (offset 0)
+Ignoring wrong pointing object 500 65536 (offset 0)
+INFO:     127.0.0.1:59064 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59064 - "GET /papers/303 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59064 - "GET /papers/303/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58512 - "POST /topics/7/papers/303/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49208 - "POST /papers/303/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49208 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61283 - "GET /papers?q=Empirical%20Evidence%20on%20the%20Evolution%20of%20Liquidity%20-%20Choice%20of%20Market%20Versus%20Limit%20Orders%20by%20Informed%20and%20Uninformed%20Traders&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61283 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62435 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62435 - "GET /papers/304 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:62435 - "GET /papers/304/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51183 - "POST /topics/7/papers/304/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62200 - "POST /papers/304/topics/7/structural-skim HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62200 - "POST /papers/304/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64474 - "PUT /papers/304/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64474 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63804 - "GET /papers?q=Limit%20Order%20Book%20as%20a%20Market%20for%20Liquidity&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63804 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64767 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64767 - "GET /papers/305 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58552 - "POST /papers/305/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58552 - "GET /papers/305/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62223 - "PUT /papers/305/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62544 - "POST /topics/7/papers/305/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62544 - "POST /topics/7/papers/305/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62544 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62544 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56624 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54958 - "POST /papers/305/topics/7/structural-skim HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58498 - "POST /topics/7/papers/305/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58498 - "POST /papers/305/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53112 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53112 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63137 - "GET /papers?q=A%20Dynamic%20Model%20of%20the%20Limit%20Order%20Book&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63137 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63137 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63137 - "GET /papers/306 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63137 - "POST /papers/306/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63137 - "GET /papers/306/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "PUT /papers/306/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "POST /papers/306/topics/7/structural-skim HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54383 - "POST /topics/7/papers/306/toggle-not-interesting HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58811 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58811 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59318 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59318 - "GET /papers/307 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59318 - "GET /papers/307/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55545 - "POST /topics/7/papers/307/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55545 - "POST /papers/307/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62882 - "PUT /papers/307/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64997 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64997 - "GET /papers?q=One%20Security%2C%20Many%20Markets%3A%20Determining%20the%20Contributions%20to%20Price%20Discovery.&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64997 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65534 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65534 - "GET /papers/308 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65534 - "POST /papers/308/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65534 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64045 - "POST /topics/7/papers/308/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64045 - "POST /papers/308/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64045 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64045 - "GET /papers/307 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:64045 - "GET /papers/307/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56734 - "PUT /papers/307/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56734 - "GET /papers/308 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56734 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56734 - "GET /papers/308 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56734 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52252 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59419 - "GET /papers/307 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59419 - "GET /papers/307/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54109 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54109 - "GET /papers/308 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:54109 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56794 - "PUT /papers/308/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56794 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56794 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55689 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55689 - "GET /papers/309 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:55689 - "GET /papers/309/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65016 - "POST /topics/7/papers/309/toggle-not-interesting HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62074 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62074 - "GET /papers/308 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:62074 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59939 - "PUT /papers/308/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59939 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59939 - "GET /papers/309 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59939 - "GET /papers/309/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59939 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59939 - "GET /papers/308 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59939 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59939 - "PUT /papers/308/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62905 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62905 - "GET /papers?q=kukanov&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62905 - "GET /papers/114 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:62905 - "GET /papers/114/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49729 - "PUT /papers/114/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49729 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58511 - "GET /papers?q=ave&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58511 - "GET /papers?q=avellan&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58511 - "GET /papers/111 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60025 - "POST /papers/111/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60025 - "GET /papers/111/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53662 - "POST /topics/7/papers/111/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59970 - "PUT /papers/111/topics/7/note HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59970 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57567 - "GET /papers?q=Continuous%20Auctions%20and%20Insider%20Trading&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57567 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58186 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56712 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56308 - "GET /papers?q=&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50425 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50425 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64918 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56609 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     Started server process [22508]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59883 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64046 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52378 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51335 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     Started server process [38652]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60030 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60030 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60030 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     Started server process [23344]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61088 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60320 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60320 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59007 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50817 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50817 - "GET /papers/upload HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 6262.97it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+INFO:     127.0.0.1:61501 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61501 - "GET /papers/310 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:61501 - "GET /papers/310/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56757 - "GET /papers/310/info?edit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55219 - "PUT /papers/310/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55219 - "GET /papers/310/info?edit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60102 - "PUT /papers/310/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60102 - "POST /topics/7/papers/310/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60102 - "POST /papers/310/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64368 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64368 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61493 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61493 - "GET /papers/311 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:61493 - "GET /papers/311/topics/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52885 - "GET /papers/311/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "POST /topics/7/papers/311/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "POST /papers/311/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61107 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61107 - "GET /papers/312 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61107 - "POST /papers/312/add-to-topic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61107 - "GET /papers/312/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59182 - "POST /topics/7/papers/312/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59182 - "POST /papers/312/read-next HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59182 - "GET /papers HTTP/1.1" 200 OK
+INFO:     Started server process [22456]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55880 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55336 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57961 - "GET /papers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /papers?q=Illiquidity%20and%20Stock%20Returns%20-%20Cross-Section%20and%20Time-Series%20Effects&topic_id= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /papers/313 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52366 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52366 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62556 - "GET /topics/new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54768 - "POST /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54768 - "GET /topics/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54768 - "GET /topics/8/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59441 - "GET /topics/8/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62951 - "GET /papers/upload?topic_id=8 HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 4788.60it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+INFO:     127.0.0.1:58038 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58038 - "GET /papers/314 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:58038 - "GET /papers/314/topics/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58038 - "POST /papers/314/topics/8/deep-synthesis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64721 - "POST /topics/8/papers/314/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64721 - "GET /topics/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64721 - "GET /topics/8/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "GET /topics/8/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "GET /papers/upload?topic_id=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57739 - "POST /papers/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57739 - "GET /papers/315 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:57739 - "GET /papers/315/topics/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59093 - "POST /topics/8/papers/315/toggle-seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59093 - "GET /topics/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59093 - "GET /topics/8/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56168 - "GET /topics/8/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58382 - "GET /papers/upload?topic_id=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65192 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65192 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65192 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57168 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56183 - "GET /topics/7/edit?from_detail=1 HTTP/1.1" 200 OK
+INFO:     Started server process [18652]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54697 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54697 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54697 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54697 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52253 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52253 - "GET /topics/7/edit?from_detail=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64562 - "PUT /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64562 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64562 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /topics/7/papers-list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /papers/249 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49670 - "GET /papers/249/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /papers/236 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49670 - "GET /papers/236/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /papers/218 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49670 - "GET /papers/218/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /papers/270 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49670 - "GET /papers/270/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /papers/215 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49670 - "GET /papers/215/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /papers/268 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49670 - "GET /papers/268/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57771 - "GET /papers/111 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:57771 - "GET /papers/111/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57771 - "GET /papers/279 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:57771 - "GET /papers/279/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57771 - "GET /papers/304 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:57771 - "GET /papers/304/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "GET /papers/271 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59361 - "GET /papers/271/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "GET /papers/225 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59361 - "GET /papers/225/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "GET /papers/273 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59361 - "GET /papers/273/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "GET /papers/312 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59361 - "GET /papers/312/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "GET /papers/312 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59361 - "GET /papers/312/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "GET /papers/311 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59361 - "GET /papers/311/topics/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59361 - "POST /papers/311/topics/6/structural-skim HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53041 - "GET /papers/311/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53041 - "GET /papers/311/topics/6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63064 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63064 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59381 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/271 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/271/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/261 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/261/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/233 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/233/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/243 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/243/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/217 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/217/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/247 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/247/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/214 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/214/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /topics/7/papers-list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/292 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/292/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /papers/307 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52051 - "GET /papers/307/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53151 - "GET /papers/296 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:53151 - "GET /papers/296/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59145 - "GET /papers/310 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59145 - "GET /papers/310/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59145 - "GET /papers/228 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59145 - "GET /papers/228/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59145 - "GET /papers/221 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59145 - "GET /papers/221/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56602 - "GET /papers/144 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56602 - "GET /papers/144/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56602 - "GET /papers/269 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56602 - "GET /papers/269/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56602 - "GET /papers/280 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56602 - "GET /papers/280/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56602 - "GET /papers/272 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56602 - "GET /papers/272/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65138 - "POST /papers/272/topics/7/structural-skim HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55201 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55201 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60103 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60103 - "GET /topics/7/papers-list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60103 - "GET /papers/280 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60103 - "GET /papers/280/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60103 - "GET /papers/272 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60103 - "GET /papers/272/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52348 - "GET /papers/283 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52348 - "GET /papers/283/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52348 - "GET /papers/308 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:52348 - "GET /papers/308/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63687 - "GET /papers/114 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:63687 - "GET /papers/114/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63081 - "GET /papers/140 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:63081 - "GET /papers/140/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65215 - "GET /papers/140 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:65215 - "GET /papers/140/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53223 - "GET /papers/254 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:53223 - "GET /papers/254/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55484 - "GET /papers/259 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:55484 - "GET /papers/259/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55484 - "GET /papers/291 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:55484 - "GET /papers/291/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55484 - "GET /papers/222 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:55484 - "GET /papers/222/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /papers/223 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49668 - "GET /papers/223/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /papers/232 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51424 - "GET /papers/232/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /papers/232 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51424 - "GET /papers/232/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /papers/250 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51424 - "GET /papers/250/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /papers/286 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51424 - "GET /papers/286/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60702 - "GET /papers/305 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60702 - "GET /papers/305/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60702 - "GET /papers/224 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60702 - "GET /papers/224/topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60702 - "GET /papers/253 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60702 - "GET /papers/253/topics/7 HTTP/1.1" 200 OK
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 20 65536 (offset 0)
+Ignoring wrong pointing object 25 65536 (offset 0)
+Ignoring wrong pointing object 30 65536 (offset 0)
+Ignoring wrong pointing object 35 65536 (offset 0)
+Ignoring wrong pointing object 40 65536 (offset 0)
+Ignoring wrong pointing object 45 65536 (offset 0)
+Ignoring wrong pointing object 50 65536 (offset 0)
+Ignoring wrong pointing object 55 65536 (offset 0)
+Ignoring wrong pointing object 60 65536 (offset 0)
+Ignoring wrong pointing object 65 65536 (offset 0)
+Ignoring wrong pointing object 70 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 80 65536 (offset 0)
+Ignoring wrong pointing object 85 65536 (offset 0)
+Ignoring wrong pointing object 90 65536 (offset 0)
+Ignoring wrong pointing object 95 65536 (offset 0)
+Ignoring wrong pointing object 100 65536 (offset 0)
+Ignoring wrong pointing object 105 65536 (offset 0)
+Ignoring wrong pointing object 110 65536 (offset 0)
+Ignoring wrong pointing object 115 65536 (offset 0)
+Ignoring wrong pointing object 120 65536 (offset 0)
+Ignoring wrong pointing object 125 65536 (offset 0)
+Ignoring wrong pointing object 130 65536 (offset 0)
+Ignoring wrong pointing object 138 65536 (offset 0)
+Ignoring wrong pointing object 143 65536 (offset 0)
+Ignoring wrong pointing object 148 65536 (offset 0)
+Ignoring wrong pointing object 153 65536 (offset 0)
+Ignoring wrong pointing object 158 65536 (offset 0)
+Ignoring wrong pointing object 163 65536 (offset 0)
+Ignoring wrong pointing object 168 65536 (offset 0)
+Ignoring wrong pointing object 173 65536 (offset 0)
+Ignoring wrong pointing object 178 65536 (offset 0)
+Ignoring wrong pointing object 183 65536 (offset 0)
+Ignoring wrong pointing object 188 65536 (offset 0)
+Ignoring wrong pointing object 193 65536 (offset 0)
+Ignoring wrong pointing object 198 65536 (offset 0)
+Ignoring wrong pointing object 203 65536 (offset 0)
+Ignoring wrong pointing object 208 65536 (offset 0)
+Ignoring wrong pointing object 213 65536 (offset 0)
+Ignoring wrong pointing object 218 65536 (offset 0)
+Ignoring wrong pointing object 223 65536 (offset 0)
+Ignoring wrong pointing object 228 65536 (offset 0)
+Ignoring wrong pointing object 233 65536 (offset 0)
+Ignoring wrong pointing object 238 65536 (offset 0)
+Ignoring wrong pointing object 252 65536 (offset 0)
+Ignoring wrong pointing object 262 65536 (offset 0)
+Ignoring wrong pointing object 272 65536 (offset 0)
+Ignoring wrong pointing object 282 65536 (offset 0)
+Ignoring wrong pointing object 292 65536 (offset 0)
+INFO:     127.0.0.1:60702 - "POST /papers/253/topics/7/structural-skim HTTP/1.1" 200 OK
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 20 65536 (offset 0)
+Ignoring wrong pointing object 25 65536 (offset 0)
+Ignoring wrong pointing object 30 65536 (offset 0)
+Ignoring wrong pointing object 35 65536 (offset 0)
+Ignoring wrong pointing object 40 65536 (offset 0)
+Ignoring wrong pointing object 45 65536 (offset 0)
+Ignoring wrong pointing object 50 65536 (offset 0)
+Ignoring wrong pointing object 55 65536 (offset 0)
+Ignoring wrong pointing object 60 65536 (offset 0)
+Ignoring wrong pointing object 65 65536 (offset 0)
+Ignoring wrong pointing object 70 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 80 65536 (offset 0)
+Ignoring wrong pointing object 85 65536 (offset 0)
+Ignoring wrong pointing object 90 65536 (offset 0)
+Ignoring wrong pointing object 95 65536 (offset 0)
+Ignoring wrong pointing object 100 65536 (offset 0)
+Ignoring wrong pointing object 105 65536 (offset 0)
+Ignoring wrong pointing object 110 65536 (offset 0)
+Ignoring wrong pointing object 115 65536 (offset 0)
+Ignoring wrong pointing object 120 65536 (offset 0)
+Ignoring wrong pointing object 125 65536 (offset 0)
+Ignoring wrong pointing object 130 65536 (offset 0)
+Ignoring wrong pointing object 138 65536 (offset 0)
+Ignoring wrong pointing object 143 65536 (offset 0)
+Ignoring wrong pointing object 148 65536 (offset 0)
+Ignoring wrong pointing object 153 65536 (offset 0)
+Ignoring wrong pointing object 158 65536 (offset 0)
+Ignoring wrong pointing object 163 65536 (offset 0)
+Ignoring wrong pointing object 168 65536 (offset 0)
+Ignoring wrong pointing object 173 65536 (offset 0)
+Ignoring wrong pointing object 178 65536 (offset 0)
+Ignoring wrong pointing object 183 65536 (offset 0)
+Ignoring wrong pointing object 188 65536 (offset 0)
+Ignoring wrong pointing object 193 65536 (offset 0)
+Ignoring wrong pointing object 198 65536 (offset 0)
+Ignoring wrong pointing object 203 65536 (offset 0)
+Ignoring wrong pointing object 208 65536 (offset 0)
+Ignoring wrong pointing object 213 65536 (offset 0)
+Ignoring wrong pointing object 218 65536 (offset 0)
+Ignoring wrong pointing object 223 65536 (offset 0)
+Ignoring wrong pointing object 228 65536 (offset 0)
+Ignoring wrong pointing object 233 65536 (offset 0)
+Ignoring wrong pointing object 238 65536 (offset 0)
+Ignoring wrong pointing object 252 65536 (offset 0)
+Ignoring wrong pointing object 262 65536 (offset 0)
+Ignoring wrong pointing object 272 65536 (offset 0)
+Ignoring wrong pointing object 282 65536 (offset 0)
+Ignoring wrong pointing object 292 65536 (offset 0)
+INFO:     127.0.0.1:62772 - "POST /papers/253/topics/7/structural-skim HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64134 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64134 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51680 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51680 - "GET /topics/7/edit?from_detail=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57657 - "PUT /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57657 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57657 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49199 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49199 - "GET /topics/7/papers-list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59145 - "GET /papers/253 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:59145 - "GET /papers/253/topics/7 HTTP/1.1" 200 OK
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 20 65536 (offset 0)
+Ignoring wrong pointing object 25 65536 (offset 0)
+Ignoring wrong pointing object 30 65536 (offset 0)
+Ignoring wrong pointing object 35 65536 (offset 0)
+Ignoring wrong pointing object 40 65536 (offset 0)
+Ignoring wrong pointing object 45 65536 (offset 0)
+Ignoring wrong pointing object 50 65536 (offset 0)
+Ignoring wrong pointing object 55 65536 (offset 0)
+Ignoring wrong pointing object 60 65536 (offset 0)
+Ignoring wrong pointing object 65 65536 (offset 0)
+Ignoring wrong pointing object 70 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 80 65536 (offset 0)
+Ignoring wrong pointing object 85 65536 (offset 0)
+Ignoring wrong pointing object 90 65536 (offset 0)
+Ignoring wrong pointing object 95 65536 (offset 0)
+Ignoring wrong pointing object 100 65536 (offset 0)
+Ignoring wrong pointing object 105 65536 (offset 0)
+Ignoring wrong pointing object 110 65536 (offset 0)
+Ignoring wrong pointing object 115 65536 (offset 0)
+Ignoring wrong pointing object 120 65536 (offset 0)
+Ignoring wrong pointing object 125 65536 (offset 0)
+Ignoring wrong pointing object 130 65536 (offset 0)
+Ignoring wrong pointing object 138 65536 (offset 0)
+Ignoring wrong pointing object 143 65536 (offset 0)
+Ignoring wrong pointing object 148 65536 (offset 0)
+Ignoring wrong pointing object 153 65536 (offset 0)
+Ignoring wrong pointing object 158 65536 (offset 0)
+Ignoring wrong pointing object 163 65536 (offset 0)
+Ignoring wrong pointing object 168 65536 (offset 0)
+Ignoring wrong pointing object 173 65536 (offset 0)
+Ignoring wrong pointing object 178 65536 (offset 0)
+Ignoring wrong pointing object 183 65536 (offset 0)
+Ignoring wrong pointing object 188 65536 (offset 0)
+Ignoring wrong pointing object 193 65536 (offset 0)
+Ignoring wrong pointing object 198 65536 (offset 0)
+Ignoring wrong pointing object 203 65536 (offset 0)
+Ignoring wrong pointing object 208 65536 (offset 0)
+Ignoring wrong pointing object 213 65536 (offset 0)
+Ignoring wrong pointing object 218 65536 (offset 0)
+Ignoring wrong pointing object 223 65536 (offset 0)
+Ignoring wrong pointing object 228 65536 (offset 0)
+Ignoring wrong pointing object 233 65536 (offset 0)
+Ignoring wrong pointing object 238 65536 (offset 0)
+Ignoring wrong pointing object 252 65536 (offset 0)
+Ignoring wrong pointing object 262 65536 (offset 0)
+Ignoring wrong pointing object 272 65536 (offset 0)
+Ignoring wrong pointing object 282 65536 (offset 0)
+Ignoring wrong pointing object 292 65536 (offset 0)
+INFO:     127.0.0.1:59145 - "POST /papers/253/topics/7/structural-skim HTTP/1.1" 200 OK
+INFO:     Started server process [17316]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51218 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51165 - "GET /topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57733 - "GET /topics/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57733 - "GET /topics/7/authors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53022 - "GET /topics/7/steering-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53022 - "GET /topics/7/papers-list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62309 - "GET /papers/253 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:62309 - "GET /papers/253/topics/7 HTTP/1.1" 200 OK
+Ignoring wrong pointing object 2 65536 (offset 0)
+Ignoring wrong pointing object 14 65536 (offset 0)
+Ignoring wrong pointing object 20 65536 (offset 0)
+Ignoring wrong pointing object 25 65536 (offset 0)
+Ignoring wrong pointing object 30 65536 (offset 0)
+Ignoring wrong pointing object 35 65536 (offset 0)
+Ignoring wrong pointing object 40 65536 (offset 0)
+Ignoring wrong pointing object 45 65536 (offset 0)
+Ignoring wrong pointing object 50 65536 (offset 0)
+Ignoring wrong pointing object 55 65536 (offset 0)
+Ignoring wrong pointing object 60 65536 (offset 0)
+Ignoring wrong pointing object 65 65536 (offset 0)
+Ignoring wrong pointing object 70 65536 (offset 0)
+Ignoring wrong pointing object 75 65536 (offset 0)
+Ignoring wrong pointing object 80 65536 (offset 0)
+Ignoring wrong pointing object 85 65536 (offset 0)
+Ignoring wrong pointing object 90 65536 (offset 0)
+Ignoring wrong pointing object 95 65536 (offset 0)
+Ignoring wrong pointing object 100 65536 (offset 0)
+Ignoring wrong pointing object 105 65536 (offset 0)
+Ignoring wrong pointing object 110 65536 (offset 0)
+Ignoring wrong pointing object 115 65536 (offset 0)
+Ignoring wrong pointing object 120 65536 (offset 0)
+Ignoring wrong pointing object 125 65536 (offset 0)
+Ignoring wrong pointing object 130 65536 (offset 0)
+Ignoring wrong pointing object 138 65536 (offset 0)
+Ignoring wrong pointing object 143 65536 (offset 0)
+Ignoring wrong pointing object 148 65536 (offset 0)
+Ignoring wrong pointing object 153 65536 (offset 0)
+Ignoring wrong pointing object 158 65536 (offset 0)
+Ignoring wrong pointing object 163 65536 (offset 0)
+Ignoring wrong pointing object 168 65536 (offset 0)
+Ignoring wrong pointing object 173 65536 (offset 0)
+Ignoring wrong pointing object 178 65536 (offset 0)
+Ignoring wrong pointing object 183 65536 (offset 0)
+Ignoring wrong pointing object 188 65536 (offset 0)
+Ignoring wrong pointing object 193 65536 (offset 0)
+Ignoring wrong pointing object 198 65536 (offset 0)
+Ignoring wrong pointing object 203 65536 (offset 0)
+Ignoring wrong pointing object 208 65536 (offset 0)
+Ignoring wrong pointing object 213 65536 (offset 0)
+Ignoring wrong pointing object 218 65536 (offset 0)
+Ignoring wrong pointing object 223 65536 (offset 0)
+Ignoring wrong pointing object 228 65536 (offset 0)
+Ignoring wrong pointing object 233 65536 (offset 0)
+Ignoring wrong pointing object 238 65536 (offset 0)
+Ignoring wrong pointing object 252 65536 (offset 0)
+Ignoring wrong pointing object 262 65536 (offset 0)
+Ignoring wrong pointing object 272 65536 (offset 0)
+Ignoring wrong pointing object 282 65536 (offset 0)
+Ignoring wrong pointing object 292 65536 (offset 0)
+INFO:     127.0.0.1:61190 - "POST /papers/253/topics/7/structural-skim HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 420, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\anaconda3\envs\poneglyph\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\source\repos\poneglyph\poneglyph\routes\papers.py", line 718, in generate_structural_skim_v2
+    synthesis_error = await _synthesize_paper(paper_id, topic)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zhong\source\repos\poneglyph\poneglyph\pipeline.py", line 100, in _synthesize_paper
+    conn.execute(
+sqlite3.OperationalError: no such column: skip_reason

@@ -72,7 +72,11 @@ def main() -> None:
     # Use conda env Python; fall back to current interpreter if env missing
     python = str(CONDA_PYTHON) if CONDA_PYTHON.exists() else sys.executable
 
-    # Start uvicorn as a subprocess
+    # Start uvicorn as a subprocess, logging to logs/server.log
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_file = open(log_dir / "server.log", "a", encoding="utf-8")
+
     server = subprocess.Popen(
         [
             python,
@@ -86,6 +90,8 @@ def main() -> None:
         ],
         cwd=str(PROJECT_ROOT),
         env=env,
+        stdout=log_file,
+        stderr=log_file,
         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
     )
 

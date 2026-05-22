@@ -75,54 +75,100 @@ WHERE pn.human_note IS NOT NULL AND pn.human_note != ''
   );
 ```
 
-### Deprecate (but do not drop) `paper_notes.human_note`
+### Drop `paper_notes.human_note`
 
-Leave the column in place as a read-only backup of pre-migration state. A later cleanup phase
-can drop it once we're confident nothing reads it. The migration is logged in the steering
-log so the trail is auditable.
+After the backfill migrations above confirm success (row counts match), drop the column in the
+same migration block:
+
+```sql
+-- SQLite doesn't support DROP COLUMN before 3.35; use the recreate-table dance if needed.
+-- As of SQLite 3.35+ (Python 3.10+ ships 3.39+), just:
+ALTER TABLE paper_notes DROP COLUMN human_note;
+```
+
+Before dropping, verify no reader still references it: audit `llm_cross.py`, `llm_bulk.py`,
+`llm_qa.py`, `pipeline.py`, and all steering/context helpers. Any SELECT on `paper_notes.human_note`
+must switch to `topic_paper_notes.human_note` filtered by the current topic_id before the
+drop runs. The migration function should assert the column no longer exists after the drop.
 
 The other columns of `paper_notes` (`paper_info`, `abstract_excerpt`) stay shared at the
 paper level — they're metadata, not opinion.
 
+### New `pending_skims` table (bulk batching)
+
+```sql
+CREATE TABLE IF NOT EXISTS pending_skims (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id    INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    paper_id    INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+    queued_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    status      TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'done' | 'error'
+    error_msg   TEXT,
+    UNIQUE(topic_id, paper_id)
+);
+```
+
+Used only for bulk ingest (see Auto-skim strategy below). Single manual adds skip the queue.
+
 ## Route changes
 
-### New canonical route
+### New canonical routes
 
 ```
-GET  /papers/{paper_id}/topics/{topic_id}            → detail page for (paper, topic)
-POST /papers/{paper_id}/topics/{topic_id}/note       → save per-topic human note
+GET  /papers/{paper_id}/topics/{topic_id}                   → detail page for (paper, topic)
+GET  /papers/{paper_id}/topics/{topic_id}/structural-skim   → htmx tab: skim panel
+POST /papers/{paper_id}/topics/{topic_id}/structural-skim   → generate/regenerate skim
+GET  /papers/{paper_id}/topics/{topic_id}/deep-synthesis    → htmx tab: deep synthesis panel
+POST /papers/{paper_id}/topics/{topic_id}/deep-synthesis    → generate/regenerate deep synthesis
+GET  /papers/{paper_id}/topics/{topic_id}/note              → htmx tab: notes panel
+POST /papers/{paper_id}/topics/{topic_id}/note              → save per-topic human note
+GET  /topics/{topic_id}/skim-progress                       → JSON {pending: N, done: M} for polling
+```
+
+Paper-level tabs (not topic-scoped) stay at their current paths:
+
+```
+GET  /papers/{paper_id}/info          → paper metadata panel (shared)
+GET  /papers/{paper_id}/pdf/manage    → PDF management (shared)
+GET  /papers/{paper_id}/topics-panel  → "which topics" panel + add/remove (shared; rename from /topics to avoid
+                                         colliding with the new /topics/{id} sub-routes)
 ```
 
 ### Existing routes — redirect / repoint
 
 | Old | New behavior |
 |---|---|
-| `GET /papers/{paper_id}` | 302 → `/papers/{paper_id}/topics/{first_topic_id}`. If paper has no topics: render a thin paper-shell page with title/abstract/PDF and a "This paper isn't in any topic yet — add to one to view skim/synthesis" panel listing all topics with an "Add" button each |
-| `GET /papers/{paper_id}?topic={tid}` | 302 → `/papers/{paper_id}/topics/{tid}` (back-compat for bookmarks) |
-| `GET /papers/{paper_id}/structural-skim?topic_id=X` | Keep as-is; called by htmx tab swaps inside the page |
-| `GET /papers/{paper_id}/deep-synthesis?topic_id=X` | Keep as-is |
-| `GET /papers/{paper_id}/info` | Keep as-is (paper-level info is shared) |
-| `GET /papers/{paper_id}/pdf/manage` | Keep as-is (PDF is paper-level) |
-| `POST /papers/{paper_id}/note` (current shared-note endpoint) | Remove. The form now POSTs to the per-topic note endpoint |
+| `GET /papers/{paper_id}` | 302 → `/papers/{paper_id}/topics/{first_topic_id}`. If paper has no topics: render a thin paper-shell page with title/abstract/PDF and a "This paper isn't in any topic yet" panel |
+| `GET /papers/{paper_id}?topic={tid}` | 302 → `/papers/{paper_id}/topics/{tid}` (back-compat) |
+| `GET /papers/{paper_id}/structural-skim?topic_id=X` | 301 → `/papers/{paper_id}/topics/X/structural-skim` |
+| `GET /papers/{paper_id}/deep-synthesis?topic_id=X` | 301 → `/papers/{paper_id}/topics/X/deep-synthesis` |
+| `POST /papers/{paper_id}/note` (shared) | Remove; replaced by per-topic POST |
 
-The inner htmx tabs (skim / deep / info / PDF / topics / notes) keep their existing endpoints
-and continue to accept `topic_id` as a query/form param, since they're inner swaps within the
-outer page that's already scoped to a topic. Rewriting them under
-`/papers/{paper_id}/topics/{topic_id}/...` is *not* required for v1 — call out as a follow-up.
+### Auto-skim strategy: single vs bulk
 
-### Add-to-topic — trigger auto-skim
+**Single add-to-topic** (manual user action): run the skim inline using FastAPI `BackgroundTasks`
+— the response returns immediately (redirects to the new per-topic URL) while the skim generates
+in the background. The topic-paper page shows a "Generating skim…" indicator (htmx polls
+`/topics/{tid}/skim-progress` every 3 s until the `pending` count for this paper drops to 0).
 
-The existing `POST /papers/{paper_id}/add-to-topic` endpoint (which inserts a `topic_papers`
-row) needs an extension: after the insert, if the topic has a non-empty `skim_skill_md` and
-no `topic_paper_notes` row exists yet for this (paper, topic), call the same skim generator
-that the "Generate" button uses. Run inline (the existing generator is already a single LLM
-call with abstract input — fast enough not to need a background queue for v1). Wrap in a
-try/except that logs failures to `topic_steering_log` and proceeds, so a single failed skim
-doesn't block the topic-add response.
+**Bulk add** (scout backfill, citation ingest — N papers at once): instead of blocking on N
+sequential LLM calls, enqueue all (topic_id, paper_id) pairs into `pending_skims`, then fire a
+single FastAPI `BackgroundTasks` job that drains the queue with `asyncio.Semaphore(3)` — at most
+3 concurrent skim calls. On the topic detail page, if `pending_skims` has rows for this topic,
+show a persistent progress bar (htmx polls `GET /topics/{topic_id}/skim-progress` every 3 s):
 
-Scout ingest paths (`citation_scout.py`, future `article_relevance.py` from Phase 6) already
-call into a common `_upsert_paper` / link-to-topic helper — extend that helper, not each
-caller, so all ingest paths share the auto-skim trigger.
+```
+Generating skims: 12 / 50 done  [███████░░░░░░░░░]
+```
+
+The bar disappears when `pending = 0`. If any skim errors, the row is marked `status='error'` with
+the message; the progress endpoint surfaces error count so the user can see failures without
+blocking the rest of the batch.
+
+**Shared helper `queue_skim_for_topic(topic_id, paper_id, background_tasks)`**: a single
+function called by manual add-to-topic, scout ingest, and article ingest. It decides inline vs
+queue based on whether a BackgroundTasks context is available and how many pending rows already
+exist. All callers pass through this helper — no duplication across scout paths.
 
 ## UI changes
 
@@ -151,35 +197,37 @@ caller, so all ingest paths share the auto-skim trigger.
 
 | # | Step | Notes |
 |---|---|---|
-| 1 | DB migration: add `topic_paper_notes.human_note` column + backfill from `paper_notes.human_note` (both UPDATE and INSERT-stub flows) | Wrap in the same backup-before-migrate hook from phase 4b §3.4 |
-| 2 | New canonical route `GET /papers/{paper_id}/topics/{topic_id}`; rendering = existing detail flow but parameterized cleanly | At this point the page works at both URLs |
-| 3 | Old-URL redirects: `/papers/{id}` → first topic; `/papers/{id}?topic=X` → new URL | Verify bookmarks/external links still work |
-| 4 | Topic tabs partial + include in `detail.html` | Visual surface |
-| 5 | Per-topic note endpoint + repoint the Notes form. Remove old shared-note endpoint | Notes now scoped |
-| 6 | Auto-skim on add-to-topic (shared helper used by manual add, citation scout, and article scout) | Final UX promise delivered |
-| 7 | Update all internal links across templates (`topics/detail.html`, `papers/list.html`, search results, scout-run views) to use the new URL when a topic context is known | Anywhere we currently link to `/papers/{id}` from inside a topic context |
-| 8 | Smoke test: papers with 0, 1, and multiple topics; add/remove from topic with and without skill configured; verify backfill notes intact | |
+| 1 | Audit all readers of `paper_notes.human_note` across the codebase; repoint each to `topic_paper_notes.human_note` filtered by topic | Must precede migration so nothing reads the old source after drop |
+| 2 | DB migration: add `topic_paper_notes.human_note` + `pending_skims` table; backfill UPDATE + stub INSERT; drop `paper_notes.human_note` | Backup-before-migrate hook from phase 4b §3.4; assert column gone after drop |
+| 3 | New canonical route `GET /papers/{paper_id}/topics/{topic_id}` + old-URL 302 redirects | Page works at both URLs; bookmarks preserved |
+| 4 | Move topic-scoped tab routes to `/papers/{id}/topics/{tid}/structural-skim`, `deep-synthesis`, `note`; add 301 redirects from old paths | Update all `hx-get`/`hx-post` in templates to use new paths |
+| 5 | Rename `/papers/{id}/topics` tab endpoint → `/papers/{id}/topics-panel` to avoid route collision | Small rename, update one template |
+| 6 | Topic tabs partial (`topic_tabs.html`) + include in `detail.html` | Visual surface; full-page nav on click |
+| 7 | Per-topic note POST endpoint; wire Notes form; remove old shared-note endpoint | Notes now scoped to (paper, topic) |
+| 8 | `queue_skim_for_topic` helper + `pending_skims` drain worker (BackgroundTasks + Semaphore(3)) + `/topics/{id}/skim-progress` endpoint + htmx progress bar on topic detail | Auto-skim with bulk batching |
+| 9 | Update all internal template links to use per-topic URL when topic context is known | `topics/detail.html`, `papers/list.html`, search results, scout-run views |
+| 10 | Smoke test: 0/1/many-topic papers; bulk scout add; skill missing; remove + re-add; note isolation between topics; progress bar appears and clears | |
 
 ## Risks and watchouts
 
-- **`paper_notes` is keyed `paper_id UNIQUE`** — the existing shared-note code relies on
-  one-note-per-paper. Removing that endpoint cleanly is fine, but search the codebase for any
-  other reader of `paper_notes.human_note` (scout context bundles, cross-synthesis context,
-  the steering-suggestion helper from phase 5/5b) — those need to switch to reading from
-  `topic_paper_notes.human_note` filtered by the current topic. **Do not skip this audit** —
-  silently reading the wrong source will make synthesis context drift.
-- **Cross-synthesis input** (`llm_cross.py`) already runs per topic, so swapping its note
-  source to per-topic notes is the natural change. Verify this is wired before declaring
-  done.
-- **Auto-skim on add-to-topic** runs inline. If a user mass-adds 50 papers to a topic via a
-  scout backfill, that's 50 sequential LLM calls in the request. Either (a) cap concurrent
-  skim runs and stream progress, or (b) for bulk operations, enqueue skims via the same path
-  the existing "regenerate all skims" button uses. Pick one before shipping; don't leave it
-  ambiguous.
+- **Audit before migrate**: `paper_notes.human_note` is read by at least `llm_cross.py`,
+  `llm_bulk.py`, and context-bundle helpers. Every reader must be switched to
+  `topic_paper_notes.human_note` **before** the column is dropped — doing the drop first will
+  silently return NULL in synthesis context and corrupt output.
+- **Route collision**: the new `/papers/{id}/topics/{tid}` path conflicts with any existing
+  `/papers/{id}/topics` endpoint (the "which topics" panel tab). Rename the latter to
+  `/papers/{id}/topics-panel` before adding the new nested routes, or FastAPI will swallow
+  `{tid}` as a path param on the old route.
 - **Skill-hash invalidation**: `topic_paper_notes.skim_skill_hash` stores the hash of the
-  skim skill at generation time. If the topic's skill changes after auto-skim runs, the
-  existing UI already shows a "skill changed, regenerate?" affordance — this phase doesn't
-  change that, but verify it still works after the migration.
+  skim skill at generation time. The existing "skill changed, regenerate?" affordance must still
+  work after migration — verify it reads `skim_skill_hash` correctly after the column additions.
+- **BackgroundTasks scope**: FastAPI `BackgroundTasks` are tied to the request lifecycle. For
+  the bulk drain worker, ensure the DB connection it uses is opened fresh inside the background
+  function and not shared with the request that spawned it — SQLite in WAL mode is fine with
+  concurrent reads but a shared connection object is not thread-safe.
+- **`pending_skims` leak**: if the server restarts mid-drain, rows stay `status='pending'`
+  forever. On startup (app lifespan hook), re-enqueue any stale `pending` rows older than
+  5 minutes by firing a background drain task. Add this to the startup logic in `app.py`.
 
 ## Dependencies
 
@@ -194,9 +242,7 @@ caller, so all ingest paths share the auto-skim trigger.
 
 - **Per-topic abstract or paper_info** — paper-level metadata stays shared.
 - **Per-topic PDF** — one PDF per paper, shared.
-- **Migrating inner tab routes** to `/papers/{id}/topics/{tid}/skim` etc. — cosmetic; call
-  out as a follow-up. The query-param form keeps working.
-- **Dropping `paper_notes.human_note` column** — defer to a cleanup phase once the migration
-  has soaked.
 - **Per-topic embeddings** — embeddings are paper-level, fine as-is.
 - **Auto-deep-synthesis** on add-to-topic — too expensive; deep stays manual.
+- **Persistent job queue across restarts** — the stale-row recovery on startup covers the
+  crash case. A durable queue backed by Phase 8 scheduler is a future upgrade.

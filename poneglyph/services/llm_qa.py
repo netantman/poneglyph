@@ -138,9 +138,14 @@ async def answer_question(question: str) -> str:
         for topic_name, deep_synth in _all_deep_syntheses(pid):
             sec += f"Deep synthesis ({topic_name}): {deep_synth}\n"
 
-        note_row = fetch_one("SELECT human_note FROM paper_notes WHERE paper_id = ?", (pid,))
-        if note_row and note_row["human_note"]:
-            clean = strip_html(note_row["human_note"])[:300]
+        note_rows = fetch_all(
+            "SELECT human_note FROM topic_paper_notes WHERE paper_id = ?"
+            " AND human_note IS NOT NULL AND human_note != ''",
+            (pid,),
+        )
+        if note_rows:
+            combined_note = " ".join(r["human_note"] for r in note_rows)
+            clean = strip_html(combined_note)[:300]
             if clean:
                 sec += f"User annotation: {clean}\n"
 

@@ -39,7 +39,8 @@ def list_all_pdf_files() -> list[str]:
 def _sanitize_filename(name: str) -> str:
     """Remove characters unsafe for filenames."""
     name = re.sub(r'[<>:"/\\|?*]', "_", name)
-    return name.strip().strip(".")[:200]
+    # 150 chars keeps the full path under Windows MAX_PATH (260) for the deepest subfolder
+    return name.strip().strip(".")[:150]
 
 
 _ACADEMIC_NAMING_SUBFOLDERS = {"Public-Academia"}

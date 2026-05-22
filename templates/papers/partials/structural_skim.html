@@ -31,6 +31,11 @@
                  background:var(--pico-card-sectioning-background-color); color:var(--pico-muted-color);">
         ⏭ Skip
     </span>
+    {% if skim.skip_reason %}
+    <p style="margin:0.4rem 0 0; font-size:0.85rem; color:var(--pico-muted-color);">
+        <strong>Reason:</strong> {{ skim.skip_reason }}
+    </p>
+    {% endif %}
     {% endif %}
 </div>
 {% endif %}
@@ -161,8 +166,7 @@
     {% if topic_id and paper_id %}
     {% if topic_has_skill %}
     <button class="outline" style="margin:0; padding:0.2rem 0.5rem; font-size:0.8rem; width:auto;"
-            hx-post="/papers/{{ paper_id }}/structural-skim"
-            hx-vals='{"topic_id": "{{ topic_id }}"}'
+            hx-post="/papers/{{ paper_id }}/topics/{{ topic_id }}/structural-skim"
             hx-target="#skim-tab-panel"
             hx-swap="innerHTML"
             hx-indicator="#skim-ind-{{ topic_id }}">
@@ -185,8 +189,7 @@
     {% if topic_id and paper_id %}
     {% if topic_has_skill %}
     <button class="outline" style="margin:0 0 0 0.5rem; padding:0.2rem 0.5rem; font-size:0.85rem; width:auto;"
-            hx-post="/papers/{{ paper_id }}/structural-skim"
-            hx-vals='{"topic_id": "{{ topic_id }}"}'
+            hx-post="/papers/{{ paper_id }}/topics/{{ topic_id }}/structural-skim"
             hx-target="#skim-tab-panel"
             hx-swap="innerHTML"
             hx-indicator="#skim-ind-{{ topic_id }}">

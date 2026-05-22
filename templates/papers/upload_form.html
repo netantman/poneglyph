@@ -102,10 +102,20 @@
                 <select name="pdf_subfolder">
                     <option value="">— Select folder —</option>
                     {% for sf in subfolders %}
-                    <option value="{{ sf }}" {% if sf == pdf_subfolder_selected %}selected{% endif %}>{{ sf }}</option>
+                    <option value="{{ sf }}" {% if sf == (pdf_subfolder_selected or 'Public-Academia') %}selected{% endif %}>{{ sf }}</option>
                     {% endfor %}
                 </select>
             </label>
+        </fieldset>
+        {% elif pdf_linked_relpath %}
+        <!-- Linked PDF from a previous attempt — carry the path through -->
+        <fieldset>
+            <legend>PDF</legend>
+            <p style="margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--pico-muted-color);">
+                Linked file: <code>{{ pdf_linked_relpath }}</code>
+            </p>
+            <input type="hidden" name="pdf_mode" value="link">
+            <input type="hidden" name="pdf_existing_relpath" value="{{ pdf_linked_relpath }}">
         </fieldset>
         {% else %}
         <fieldset>
@@ -138,7 +148,7 @@
                         <select name="pdf_subfolder">
                             <option value="">— Select folder —</option>
                             {% for sf in subfolders %}
-                            <option value="{{ sf }}">{{ sf }}</option>
+                            <option value="{{ sf }}" {% if sf == 'Public-Academia' %}selected{% endif %}>{{ sf }}</option>
                             {% endfor %}
                         </select>
                     </label>

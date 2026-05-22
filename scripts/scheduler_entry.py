@@ -87,10 +87,9 @@ async def _run_cross_synthesis() -> None:
             continue
 
         paper_rows = fetch_all(
-            """SELECT p.*, pn.human_note
+            """SELECT p.*
                FROM papers p
                JOIN topic_papers tp ON p.id = tp.paper_id
-               LEFT JOIN paper_notes pn ON pn.paper_id = p.id
                WHERE tp.topic_id = ?
                ORDER BY COALESCE(tp.relevance_score, 0.0) DESC""",
             (tid,),
@@ -111,7 +110,7 @@ async def _run_cross_synthesis() -> None:
                 (tid, pid),
             )
             skim = row_to_dict(skim_rows[0]) if skim_rows else None
-            paper_notes.append({"paper": p, "skim": skim, "human_note": p.get("human_note")})
+            paper_notes.append({"paper": p, "skim": skim, "human_note": skim.get("human_note") if skim else None})
 
         run_id = create_run(tid, "cross_synthesis_scheduled")
         try:
