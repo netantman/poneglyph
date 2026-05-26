@@ -905,6 +905,37 @@ async def start_scout_now(request: Request, topic_id: int):
     return HTMLResponse("\n".join(html_parts))
 
 
+# ---------- Skim progress ----------
+
+@router.get("/{topic_id}/skim-progress", response_class=HTMLResponse)
+async def skim_progress(request: Request, topic_id: int):
+    """Return a live progress bar partial for pending_skims, or empty string when done."""
+    rows = fetch_all(
+        "SELECT status, COUNT(*) as n FROM pending_skims WHERE topic_id = ? GROUP BY status",
+        (topic_id,),
+    )
+    counts = {r["status"]: r["n"] for r in rows}
+    pending = counts.get("pending", 0)
+    done = counts.get("done", 0)
+    errors = counts.get("error", 0)
+    total = pending + done + errors
+
+    if total == 0:
+        return HTMLResponse("")  # nothing queued — hide bar
+
+    return templates.TemplateResponse(
+        "topics/partials/skim_progress.html",
+        {
+            "request": request,
+            "topic_id": topic_id,
+            "pending": pending,
+            "done": done,
+            "errors": errors,
+            "total": total,
+        },
+    )
+
+
 # ---------- steering log helper ----------
 
 def _log_steering_change(

@@ -1,0 +1,32 @@
+<div id="qa-item-{{ item.id }}"
+     style="border-left:3px solid var(--pico-form-element-border-color);
+            padding:0.5rem 0.75rem; margin-bottom:0.75rem; border-radius:0 0.25rem 0.25rem 0;">
+    <p style="margin:0 0 0.4rem; font-size:0.9rem;">
+        <strong>Q:</strong> {{ item.question }}
+    </p>
+    <p style="margin:0 0 0.5rem; font-size:0.88rem; white-space:pre-wrap; color:var(--pico-color);">
+        <strong>A:</strong> {{ item.answer }}
+    </p>
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <button class="outline secondary"
+                style="font-size:0.78rem; padding:0.2rem 0.55rem; margin:0; width:auto;"
+                hx-post="/papers/{{ paper_id }}/topics/{{ topic_id }}/qa/{{ item.id }}/save-to-note"
+                hx-target="#human-note-section"
+                hx-swap="innerHTML"
+                title="Append this Q&amp;A to the human note for this topic">
+            &#8594; Add to note
+        </button>
+        <button class="outline secondary"
+                style="font-size:0.78rem; padding:0.2rem 0.55rem; margin:0; width:auto;
+                       border-color:var(--pico-del-color); color:var(--pico-del-color);"
+                hx-delete="/papers/{{ paper_id }}/topics/{{ topic_id }}/qa/{{ item.id }}"
+                hx-target="#qa-item-{{ item.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Delete this Q&amp;A entry?">
+            &times;
+        </button>
+        <span style="font-size:0.75rem; color:var(--pico-muted-color); margin-left:auto;">
+            {{ item.created_at[:16] if item.created_at else '' }}
+        </span>
+    </div>
+</div>

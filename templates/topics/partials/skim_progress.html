@@ -1,0 +1,35 @@
+{% if pending > 0 %}
+<div id="skim-progress-area"
+     hx-get="/topics/{{ topic_id }}/skim-progress"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     style="margin-bottom:0.75rem;">
+    <div style="background:var(--pico-card-sectioning-background-color); border-radius:0.4rem;
+                padding:0.65rem 0.85rem; border:1px solid var(--pico-primary-border);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem; font-size:0.9rem;">
+            <span>
+                <span class="spinner" style="width:0.85em;height:0.85em;vertical-align:middle;display:inline-block;margin-right:0.4rem;"></span>
+                <strong>Generating skims:</strong> {{ done }} / {{ total }} done
+                {% if errors %}
+                <span style="color:var(--pico-del-color); margin-left:0.5rem;">· {{ errors }} failed</span>
+                {% endif %}
+            </span>
+            <span style="color:var(--pico-muted-color); font-size:0.82rem;">{{ pending }} remaining</span>
+        </div>
+        <progress value="{{ done }}" max="{{ total }}" style="width:100%; margin:0;"></progress>
+    </div>
+</div>
+{% else %}
+<div id="skim-progress-area"
+     style="margin-bottom:{% if done > 0 %}0.75rem{% else %}0{% endif %};">
+    {% if done > 0 %}
+    <div style="background:rgba(22,163,74,0.08); border-radius:0.4rem; padding:0.5rem 0.85rem;
+                border:1px solid rgba(22,163,74,0.3); font-size:0.88rem;">
+        &#10003; {{ done }} skim{{ 's' if done != 1 else '' }} generated
+        {% if errors %}
+        &nbsp;·&nbsp;<span style="color:var(--pico-del-color);">{{ errors }} failed</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}

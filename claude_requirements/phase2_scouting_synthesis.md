@@ -81,6 +81,28 @@ The Haiku structural skim **auto-fires for every paper entering the system**, on
   - If no seed papers are configured for a topic, `run_topic_scout` logs a warning and exits
     with `status = 'no_seeds'` rather than doing nothing silently
 
+### Note-driven scouting directives
+After citation traversal, `run_topic_scout` also scans every human note in the topic for explicit
+scouting instructions written by the user. Trigger phrases (case-insensitive):
+- `for future scouting[: ]…`
+- `find me [the] papers [on/about]…`
+- `look for papers [on/about]…`
+- `search for papers [on/about]…`
+- `scout for[: ]…`
+- `to scout[: ]…`
+
+For each matched directive the text following the trigger (to sentence end or line end) is used as
+a free-text query to the Semantic Scholar `/paper/search` endpoint (up to 8 results per directive).
+Results are upserted and linked to the topic **without** the topic keyword filter — the user's
+directive is already specific. New papers flow into the standard Haiku skim pipeline.
+
+Implementation:
+- `citation_scout.extract_note_directives(topic_id) → list[str]` — fetches notes, strips HTML,
+  applies regex patterns, returns deduplicated directive strings
+- `citation_scout.search_from_directives(directives, topic_id, results_per=8) → list[int]`
+  — calls `semantic_scholar.search_papers(query, limit)` per directive, upserts, links
+- `semantic_scholar.search_papers(query, limit) → list[dict]` — multi-result S2 search
+
 ### UI integration
 - [x] "Scout Now" button on topic detail page — `POST /scout/topic/{id}`, starts background task, HTMX polls `/scout/run/{run_id}` every 3s; shows prominent styled message box "Scouting in progress" while running, success/error box when done
 - [x] Scout Now is disabled when `skim_skill_md` is NULL (tooltip: "Upload a Structural Skim skill first")

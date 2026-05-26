@@ -1,5 +1,33 @@
 # Phase 4b — Data Resiliency Plan
 
+## Status: FULLY IMPLEMENTED
+
+All code items below are implemented. Human-action items (Task Scheduler run, GitHub repo creation, PAT token, restore drill) remain the user's responsibility as documented in each section.
+
+| Item | Status |
+|---|---|
+| `.gitignore` | ✅ Implemented |
+| `scripts/backup_db.py` (SQLite online backup, gzip, OneDrive, retention, GitHub push) | ✅ Implemented |
+| `scripts/export_snapshot.py` (JSONL + skill `.md` files, skips embeddings) | ✅ Implemented |
+| `scripts/validate_db.py` (integrity check, FK check, PDF audit, orphan detection) | ✅ Implemented |
+| `docs/RECOVERY.md` runbook | ✅ Implemented |
+| `scripts/setup_scheduler.py` Task Scheduler registration (daily 03:00 + on-logon) | ✅ Implemented |
+| PRAGMAs: `synchronous=NORMAL`, `wal_autocheckpoint=1000`, `busy_timeout=5000` | ✅ Implemented |
+| `transaction()` context manager + refactored multi-write sites | ✅ Implemented |
+| `_backup_before_migration()` called before destructive `_migrate()` steps | ✅ Implemented |
+| `PRAGMA integrity_check` on startup | ✅ Implemented |
+| Delete confirmation dialogs rewritten with cascade detail | ✅ Implemented |
+
+Human actions still outstanding (cannot be automated):
+- Run `python scripts/setup_scheduler.py` once to register Task Scheduler tasks
+- Create `poneglyph-backups` private GitHub repo + generate fine-grained PAT → paste into `.env`
+- Run `git rm --cached` on any files tracked before `.gitignore` landed
+- Verify first GitHub push and first OneDrive backup
+- Annual restore drill
+
+---
+
+
 ## 1. What we are protecting
 
 Threat-model first. The app's irreplaceable data falls into three buckets:

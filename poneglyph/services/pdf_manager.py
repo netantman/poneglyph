@@ -121,6 +121,44 @@ def extract_pdf_text(path: Path, max_pages: int = 5) -> str:
         return ""
 
 
+def extract_pdf_text_with_pages(path: Path, max_chars: int = 80_000) -> str:
+    """Extract PDF text with inline [Page N] markers for Q&A page citation.
+
+    Truncates at the last complete page boundary before max_chars.
+    Returns empty string on any failure.
+    """
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(path))
+        if reader.is_encrypted:
+            logger.warning("extract_pdf_text_with_pages: PDF is encrypted: %s", path)
+            return ""
+        parts: list[str] = []
+        total = 0
+        truncated = False
+        for i, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            chunk = f"[Page {i}]\n{text}"
+            if total + len(chunk) > max_chars:
+                truncated = True
+                break
+            parts.append(chunk)
+            total += len(chunk) + 1  # +1 for the joining newline
+        if not parts:
+            return ""
+        result = "\n\n".join(parts)
+        if truncated:
+            result += f"\n\n[PDF truncated at {max_chars} chars — later pages not shown]"
+            logger.warning(
+                "extract_pdf_text_with_pages: truncated at %d chars for %s", max_chars, path
+            )
+        return result
+    except Exception as exc:
+        logger.warning("extract_pdf_text_with_pages failed for %s: %s", path, exc)
+        return ""
+
+
 def copy_to_working_papers(pdf_path: Path, filename: str) -> Path:
     """Copy PDF to ~/Desktop/poneglyph_working_papers/."""
     desktop = Path.home() / "Desktop"

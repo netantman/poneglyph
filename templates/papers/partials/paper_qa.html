@@ -1,0 +1,53 @@
+<div id="paper-qa-panel">
+<details open style="margin:0;">
+<summary style="cursor:pointer; font-weight:600; list-style:none; display:flex; align-items:center; gap:0.5rem;">
+    <span>&#9656;</span> Ask about this paper
+    <small style="font-weight:normal; color:var(--pico-muted-color);">Haiku reads the PDF and cites page numbers</small>
+</summary>
+
+<div style="margin-top:1rem;">
+    <form hx-post="/papers/{{ paper_id }}/topics/{{ topic_id }}/qa"
+          hx-target="#paper-qa-panel"
+          hx-swap="outerHTML"
+          hx-indicator="#qa-spinner"
+          style="margin-bottom:0.5rem;">
+        <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+            <input type="text" name="question" placeholder="e.g. How is conditional variance computed?"
+                   style="flex:1; margin:0;" required autocomplete="off">
+            <button type="submit" style="width:auto; margin:0; padding:0.5rem 1rem;">Ask</button>
+            <span id="qa-spinner" class="htmx-indicator"
+                  style="font-size:0.85rem; color:var(--pico-muted-color); align-self:center;">&#8987;</span>
+        </div>
+        <div style="margin-top:0.4rem; font-size:0.82rem; color:var(--pico-muted-color);">
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:1rem; cursor:pointer;">
+                <input type="radio" name="model_choice" value="haiku" checked style="margin:0; width:auto;">
+                Haiku <span style="color:var(--pico-muted-color);">(fast)</span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer;">
+                <input type="radio" name="model_choice" value="sonnet" style="margin:0; width:auto;">
+                Sonnet <span style="color:var(--pico-muted-color);">($$)</span>
+            </label>
+        </div>
+    </form>
+
+    {% if history %}
+    <hr style="margin:0.75rem 0;">
+    <div style="font-size:0.82rem; color:var(--pico-muted-color); margin-bottom:0.5rem;">
+        {% if total_count > 20 %}
+            Showing last 20 of {{ total_count }} questions
+            — older entries not shown.
+        {% endif %}
+    </div>
+    <div id="qa-history-list">
+        {% for item in history %}
+            {% include "papers/partials/paper_qa_item.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--pico-muted-color); font-size:0.9rem; margin-top:0.5rem;">
+        No questions yet. Ask something about this paper above.
+    </p>
+    {% endif %}
+</div>
+</details>
+</div>

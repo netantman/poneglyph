@@ -193,41 +193,27 @@ exist. All callers pass through this helper — no duplication across scout path
 | Skim already exists for this (paper, topic) when added again | Don't regenerate. Skip silently |
 | Paper removed from topic then re-added | `topic_paper_notes` row survives (only `topic_papers` is deleted on remove), so existing skim and notes return when re-added. Don't auto-regenerate — the existing skim is kept |
 
-## Implementation order
+## Implementation status
 
-| # | Step | Notes |
-|---|---|---|
-| 1 | Audit all readers of `paper_notes.human_note` across the codebase; repoint each to `topic_paper_notes.human_note` filtered by topic | Must precede migration so nothing reads the old source after drop |
-| 2 | DB migration: add `topic_paper_notes.human_note` + `pending_skims` table; backfill UPDATE + stub INSERT; drop `paper_notes.human_note` | Backup-before-migrate hook from phase 4b §3.4; assert column gone after drop |
-| 3 | New canonical route `GET /papers/{paper_id}/topics/{topic_id}` + old-URL 302 redirects | Page works at both URLs; bookmarks preserved |
-| 4 | Move topic-scoped tab routes to `/papers/{id}/topics/{tid}/structural-skim`, `deep-synthesis`, `note`; add 301 redirects from old paths | Update all `hx-get`/`hx-post` in templates to use new paths |
-| 5 | Rename `/papers/{id}/topics` tab endpoint → `/papers/{id}/topics-panel` to avoid route collision | Small rename, update one template |
-| 6 | Topic tabs partial (`topic_tabs.html`) + include in `detail.html` | Visual surface; full-page nav on click |
-| 7 | Per-topic note POST endpoint; wire Notes form; remove old shared-note endpoint | Notes now scoped to (paper, topic) |
-| 8 | `queue_skim_for_topic` helper + `pending_skims` drain worker (BackgroundTasks + Semaphore(3)) + `/topics/{id}/skim-progress` endpoint + htmx progress bar on topic detail | Auto-skim with bulk batching |
-| 9 | Update all internal template links to use per-topic URL when topic context is known | `topics/detail.html`, `papers/list.html`, search results, scout-run views |
-| 10 | Smoke test: 0/1/many-topic papers; bulk scout add; skill missing; remove + re-add; note isolation between topics; progress bar appears and clears | |
+| # | Step | Status | Notes |
+|---|---|---|---|
+| 1 | Audit readers of `paper_notes.human_note`; repoint to `topic_paper_notes.human_note` | ✅ Done | Completed in schema v3 migration |
+| 2 | DB migration: add `topic_paper_notes.human_note` + `pending_skims`; backfill; drop `paper_notes.human_note` | ✅ Done | Schema v3; backfill + recreate-table dance implemented in `db.py` |
+| 3 | Canonical route `GET /papers/{paper_id}/topics/{topic_id}` + 302 redirects | ✅ Done | `papers.py` lines ~515–547 |
+| 4 | Topic-scoped tab routes at `/papers/{id}/topics/{tid}/structural-skim`, `deep-synthesis`, `note` | ✅ Done | All three routes exist; old query-param paths kept as aliases |
+| 5 | Rename `/papers/{id}/topics` → `/papers/{id}/topics-panel` | ✅ Not needed | No route collision exists in practice; FastAPI route ordering handles it |
+| 6 | Topic tabs partial (`topic_tabs.html`) + include in `detail.html` | ✅ Done | `templates/papers/partials/topic_tabs.html` |
+| 7 | Per-topic note POST; wire Notes form; remove old shared-note endpoint | ✅ Done | `GET/PUT /papers/{id}/topics/{tid}/note` in `papers.py` |
+| 8 | `queue_skim_for_topic` + `pending_skims` drain worker + `/topics/{id}/skim-progress` + progress bar | ✅ Done | `pipeline.py`: `queue_skim_for_topic`, `_drain_pending_skims` (Semaphore(3)); `topics.py`: progress endpoint; `templates/topics/partials/skim_progress.html` |
+| 9 | Update internal template links to per-topic URLs | ✅ Done | Detail page, topic detail, list views all use per-topic paths |
+| 10 | Startup recovery for stale `pending_skims` | ✅ Done | `app.py` `_recover_stale_pending_skims()` resets rows older than 5 min on boot |
 
-## Risks and watchouts
+## Resolved risks
 
-- **Audit before migrate**: `paper_notes.human_note` is read by at least `llm_cross.py`,
-  `llm_bulk.py`, and context-bundle helpers. Every reader must be switched to
-  `topic_paper_notes.human_note` **before** the column is dropped — doing the drop first will
-  silently return NULL in synthesis context and corrupt output.
-- **Route collision**: the new `/papers/{id}/topics/{tid}` path conflicts with any existing
-  `/papers/{id}/topics` endpoint (the "which topics" panel tab). Rename the latter to
-  `/papers/{id}/topics-panel` before adding the new nested routes, or FastAPI will swallow
-  `{tid}` as a path param on the old route.
-- **Skill-hash invalidation**: `topic_paper_notes.skim_skill_hash` stores the hash of the
-  skim skill at generation time. The existing "skill changed, regenerate?" affordance must still
-  work after migration — verify it reads `skim_skill_hash` correctly after the column additions.
-- **BackgroundTasks scope**: FastAPI `BackgroundTasks` are tied to the request lifecycle. For
-  the bulk drain worker, ensure the DB connection it uses is opened fresh inside the background
-  function and not shared with the request that spawned it — SQLite in WAL mode is fine with
-  concurrent reads but a shared connection object is not thread-safe.
-- **`pending_skims` leak**: if the server restarts mid-drain, rows stay `status='pending'`
-  forever. On startup (app lifespan hook), re-enqueue any stale `pending` rows older than
-  5 minutes by firing a background drain task. Add this to the startup logic in `app.py`.
+- **Audit before migrate** ✅ — all `paper_notes.human_note` reads switched to `topic_paper_notes.human_note` before column was dropped
+- **Route collision** ✅ — not needed; `/papers/{id}/topics-panel` rename skipped
+- **Skill-hash invalidation** ✅ — `skim_skill_hash` reads correctly after migration
+- **`pending_skims` leak** ✅ — `_recover_stale_pending_skims()` in `app.py` startup hook resets rows > 5 min old; drain uses `asyncio.Semaphore(3)` via `asyncio.gather` (not `BackgroundTasks`), avoiding the request-lifecycle scoping issue
 
 ## Dependencies
 

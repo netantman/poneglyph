@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Bump this whenever a destructive migration is added. _migrate() compares against
 # PRAGMA user_version and only runs newer steps, so we don't re-execute migrations
 # on every boot.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA_SQL = """
 -- Topics: user-defined research areas with keywords, steering, and LLM skill prompts
@@ -634,6 +634,23 @@ def _migrate(conn: sqlite3.Connection) -> None:
                 DROP TABLE paper_notes;
                 ALTER TABLE paper_notes_v3 RENAME TO paper_notes;
             """)
+
+    # ── Schema version 5: per-paper Q&A history ──────────────────────────────
+    if current < 5:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_qa_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_id    INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+                topic_id    INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                question    TEXT NOT NULL,
+                answer      TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_paper_qa_history_paper_topic
+                ON paper_qa_history (paper_id, topic_id)
+        """)
 
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()

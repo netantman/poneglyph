@@ -63,6 +63,19 @@
 
 <hr style="margin: 1.5rem 0;">
 
+<!-- Per-paper Q&A -->
+{% if active_topic_id %}
+<article>
+    <div hx-get="/papers/{{ paper.id }}/topics/{{ active_topic_id }}/qa"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <span style="color:var(--pico-muted-color); font-size:0.9rem;">Loading Q&amp;A…</span>
+    </div>
+</article>
+
+<hr style="margin: 1.5rem 0;">
+{% endif %}
+
 <!-- Human Note -->
 <article>
     <header><strong>Human Note</strong></header>

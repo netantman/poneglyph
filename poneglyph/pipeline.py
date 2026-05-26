@@ -8,7 +8,10 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from poneglyph.db import execute, fetch_all, fetch_one, row_to_dict, transaction
-from poneglyph.services.citation_scout import _lookup_key, discover_from_paper
+from poneglyph.services.citation_scout import (
+    _lookup_key, discover_from_paper,
+    extract_note_directives, search_from_directives,
+)
 from poneglyph.services.llm_bulk import synthesize_paper
 from poneglyph.services.semantic_scholar import get_paper as s2_get_paper
 
@@ -215,6 +218,53 @@ async def run_paper_enrichment(paper_id: int, topic_id: int, run_id: int) -> Non
         _finish_run(run_id, found=0, new=0, status="error", error=str(exc))
 
 
+def queue_skim_for_topic(topic_id: int, paper_id: int) -> None:
+    """Enqueue a (topic, paper) pair for skim synthesis. Idempotent."""
+    execute(
+        "INSERT OR IGNORE INTO pending_skims (topic_id, paper_id, status) VALUES (?, ?, 'pending')",
+        (topic_id, paper_id),
+    )
+
+
+async def _drain_pending_skims(topic_id: int, topic: dict) -> tuple[int, int]:
+    """Process all pending_skims rows for this topic with up to 3 concurrent skim calls.
+
+    Returns (synth_count, error_count).
+    """
+    import asyncio
+
+    semaphore = asyncio.Semaphore(3)
+
+    rows = fetch_all(
+        "SELECT paper_id FROM pending_skims WHERE topic_id = ? AND status = 'pending'",
+        (topic_id,),
+    )
+
+    synth_count = 0
+    error_count = 0
+
+    async def _process(paper_id: int) -> None:
+        nonlocal synth_count, error_count
+        async with semaphore:
+            err = await _synthesize_paper(paper_id, topic)
+            if err:
+                execute(
+                    "UPDATE pending_skims SET status='error', error_msg=? WHERE topic_id=? AND paper_id=?",
+                    (err[:500], topic_id, paper_id),
+                )
+                error_count += 1
+                logger.warning("_drain_pending_skims paper=%d: %s", paper_id, err)
+            else:
+                execute(
+                    "UPDATE pending_skims SET status='done' WHERE topic_id=? AND paper_id=?",
+                    (topic_id, paper_id),
+                )
+                synth_count += 1
+
+    await asyncio.gather(*[_process(r["paper_id"]) for r in rows])
+    return synth_count, error_count
+
+
 async def run_topic_scout(topic_id: int, run_id: int) -> None:
     """Discover citations for seed papers in a topic, then synthesize new ones.
 
@@ -251,20 +301,35 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
                 (len(all_new), run_id),
             )
 
-        synth_count = 0
+        # Note-driven directives: scan human notes for explicit scouting instructions
+        directives = extract_note_directives(topic_id)
+        if directives:
+            logger.info(
+                "run_topic_scout: topic=%d found %d scouting directive(s) in notes",
+                topic_id, len(directives),
+            )
+            directive_new = await search_from_directives(directives, topic_id)
+            all_new.update(directive_new)
+            execute(
+                "UPDATE scout_runs SET papers_found = ? WHERE id = ?",
+                (len(all_new), run_id),
+            )
+
+        # Queue all new papers for skim synthesis via pending_skims
         for pid in all_new:
-            err = await _synthesize_paper(pid, topic)
-            if not err:
-                synth_count += 1
-            elif err:
-                logger.warning("_synthesize_paper paper=%d: %s", pid, err)
+            execute(
+                "INSERT OR IGNORE INTO pending_skims (topic_id, paper_id, status) VALUES (?, ?, 'pending')",
+                (topic_id, pid),
+            )
+
+        synth_count, err_count = await _drain_pending_skims(topic_id, topic)
 
         from poneglyph.services.relevance import update_topic_relevance_scores
         update_topic_relevance_scores(topic_id)
         _finish_run(run_id, found=len(all_new), new=synth_count)
         logger.info(
-            "run_topic_scout done: topic=%d seeds=%d found=%d synth=%d",
-            topic_id, len(paper_ids), len(all_new), synth_count,
+            "run_topic_scout done: topic=%d seeds=%d found=%d synth=%d errors=%d",
+            topic_id, len(paper_ids), len(all_new), synth_count, err_count,
         )
     except Exception as exc:
         logger.exception("run_topic_scout failed: %s", exc)

@@ -306,3 +306,88 @@
 2026-05-21 03:00:03,227 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260521-0300.db.gz (925.7 KB)
 2026-05-21 03:00:03,270 [INFO] Pruned old backup: poneglyph-20260507-2118.db.gz
 2026-05-21 03:00:11,485 [INFO] GitHub push ok: poneglyph-20260521-0300.db.gz
+ 
+=== Fri 05/22/2026  3:00:02.06 === 
+2026-05-22 03:00:02,667 [INFO] integrity_check: ok
+2026-05-22 03:00:02,668 [INFO] foreign_key_check: ok
+2026-05-22 03:00:02,675 [INFO] PDF existence: all 141 local PDFs found
+2026-05-22 03:00:02,675 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-22 03:00:02,675 [INFO] validate_db: all checks passed
+2026-05-22 03:00:03,102 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260522-0300.db.gz (1239.1 KB)
+2026-05-22 03:00:03,108 [INFO] Pruned old backup: poneglyph-20260508-0300.db.gz
+2026-05-22 03:00:10,756 [INFO] GitHub push ok: poneglyph-20260522-0300.db.gz
+ 
+=== Fri 05/22/2026  6:19:45.92 === 
+2026-05-22 06:19:52,032 [INFO] integrity_check: ok
+2026-05-22 06:19:52,033 [INFO] foreign_key_check: ok
+2026-05-22 06:19:52,211 [INFO] PDF existence: all 141 local PDFs found
+2026-05-22 06:19:52,211 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-22 06:19:52,212 [INFO] validate_db: all checks passed
+2026-05-22 06:19:52,731 [INFO] Recent backup exists — skipping (--skip-if-recent)
+ 
+=== Fri 05/22/2026 18:57:33.46 === 
+2026-05-22 18:57:37,742 [INFO] integrity_check: ok
+2026-05-22 18:57:37,845 [INFO] foreign_key_check: ok
+2026-05-22 18:57:38,462 [INFO] PDF existence: all 141 local PDFs found
+2026-05-22 18:57:38,463 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-22 18:57:38,464 [INFO] validate_db: all checks passed
+2026-05-22 18:57:40,799 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260522-1857.db.gz (1239.1 KB)
+2026-05-22 18:57:40,819 [INFO] Pruned old backup: poneglyph-20260508-2129.db.gz
+2026-05-22 18:57:46,731 [INFO] GitHub push ok: poneglyph-20260522-1857.db.gz
+ 
+=== Sat 05/23/2026  3:00:01.66 === 
+2026-05-23 03:00:03,493 [INFO] integrity_check: ok
+2026-05-23 03:00:03,495 [INFO] foreign_key_check: ok
+2026-05-23 03:00:03,580 [INFO] PDF existence: all 170 local PDFs found
+2026-05-23 03:00:03,580 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-23 03:00:03,581 [INFO] validate_db: all checks passed
+2026-05-23 03:00:04,283 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260523-0300.db.gz (1440.3 KB)
+2026-05-23 03:00:04,290 [INFO] Pruned old backup: poneglyph-20260509-0300.db.gz
+2026-05-23 03:00:13,490 [INFO] GitHub push ok: poneglyph-20260523-0300.db.gz
+ 
+=== Sun 05/24/2026  3:00:01.68 === 
+2026-05-24 03:00:02,863 [INFO] integrity_check: ok
+2026-05-24 03:00:02,865 [INFO] foreign_key_check: ok
+2026-05-24 03:00:02,911 [INFO] PDF existence: all 231 local PDFs found
+2026-05-24 03:00:02,921 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-24 03:00:02,921 [INFO] validate_db: all checks passed
+2026-05-24 03:00:04,794 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260524-0300.db.gz (1797.9 KB)
+2026-05-24 03:00:12,246 [INFO] GitHub push ok: poneglyph-20260524-0300.db.gz
+ 
+=== Mon 05/25/2026  3:00:01.83 === 
+2026-05-25 03:00:03,142 [INFO] integrity_check: ok
+2026-05-25 03:00:03,144 [INFO] foreign_key_check: ok
+2026-05-25 03:00:03,205 [INFO] PDF existence: all 259 local PDFs found
+2026-05-25 03:00:03,205 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-25 03:00:03,206 [INFO] validate_db: all checks passed
+2026-05-25 03:00:04,753 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260525-0300.db.gz (1985.8 KB)
+2026-05-25 03:00:04,776 [INFO] Pruned old backup: poneglyph-20260511-0300.db.gz
+2026-05-25 03:00:17,708 [INFO] GitHub push ok: poneglyph-20260525-0300.db.gz
+ 
+=== Mon 05/25/2026  9:31:07.30 === 
+2026-05-25 09:31:11,979 [INFO] integrity_check: ok
+2026-05-25 09:31:11,981 [INFO] foreign_key_check: ok
+2026-05-25 09:31:12,279 [INFO] PDF existence: all 259 local PDFs found
+2026-05-25 09:31:12,280 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-25 09:31:12,280 [INFO] validate_db: all checks passed
+2026-05-25 09:31:13,556 [INFO] Recent backup exists — skipping (--skip-if-recent)
+ 
+=== Mon 05/25/2026 16:29:25.82 === 
+2026-05-25 16:29:30,769 [INFO] integrity_check: ok
+2026-05-25 16:29:30,807 [INFO] foreign_key_check: ok
+2026-05-25 16:29:31,699 [INFO] PDF existence: all 262 local PDFs found
+2026-05-25 16:29:31,701 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-25 16:29:31,714 [INFO] validate_db: all checks passed
+2026-05-25 16:29:33,601 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260525-1629.db.gz (2011.8 KB)
+2026-05-25 16:29:33,606 [INFO] Pruned old backup: poneglyph-20260512-0300.db.gz
+2026-05-25 16:29:41,223 [INFO] GitHub push ok: poneglyph-20260525-1629.db.gz
+ 
+=== Mon 05/25/2026 21:21:56.95 === 
+^C 
+=== Mon 05/25/2026 21:24:13.53 === 
+2026-05-25 21:24:17,916 [INFO] integrity_check: ok
+2026-05-25 21:24:17,943 [INFO] foreign_key_check: ok
+2026-05-25 21:24:18,981 [INFO] PDF existence: all 262 local PDFs found
+2026-05-25 21:24:18,981 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-05-25 21:24:18,982 [INFO] validate_db: all checks passed
+2026-05-25 21:24:19,798 [INFO] Recent backup exists — skipping (--skip-if-recent)

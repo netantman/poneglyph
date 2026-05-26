@@ -91,6 +91,10 @@
         Delete
     </button>
 </div>
+<div id="skim-progress-area"
+     hx-get="/topics/{{ topic.id }}/skim-progress"
+     hx-trigger="load"
+     hx-swap="outerHTML"></div>
 <div id="scout-status-area" style="margin-bottom: 0.5rem;"></div>
 <div id="cross-synthesis-status-area" style="margin-bottom: 0.5rem;"></div>
 

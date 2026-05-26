@@ -152,6 +152,101 @@ def _record_citation(from_id: int, to_id: int, direction: str) -> None:
         )
 
 
+# ---------- Note-driven scouting directives ----------
+
+# Trigger phrases the user can write in any human note to steer future scouting.
+# Each pattern captures the query text in group 1 (text after the trigger phrase).
+_DIRECTIVE_PATTERNS: list[re.Pattern] = [
+    re.compile(
+        r'(?:for future scouting|to scout|scout for)[,:\s]+([^\n.!?]{5,150})',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'find (?:me )?(?:the )?papers?(?:\s+on|\s+about|\s+regarding|\s+related to)?[,:\s]+([^\n.!?]{5,150})',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'look for papers?(?:\s+on|\s+about|\s+regarding)?[,:\s]+([^\n.!?]{5,150})',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'search for papers?(?:\s+on|\s+about|\s+regarding)?[,:\s]+([^\n.!?]{5,150})',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'scouting[,:\s]+([^\n.!?]{5,150})',
+        re.IGNORECASE,
+    ),
+]
+
+
+def _strip_html(html: str) -> str:
+    """Strip HTML tags and collapse whitespace."""
+    text = re.sub(r"<[^>]+>", " ", html)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def extract_note_directives(topic_id: int) -> list[str]:
+    """Scan human notes for this topic and return explicit scouting directive strings.
+
+    Deduplicates by lowercased form so the same phrase doesn't generate two S2 queries.
+    """
+    rows = fetch_all(
+        """SELECT tpn.human_note
+           FROM topic_paper_notes tpn
+           WHERE tpn.topic_id = ?
+             AND tpn.human_note IS NOT NULL AND tpn.human_note != ''""",
+        (topic_id,),
+    )
+    seen: set[str] = set()
+    directives: list[str] = []
+    for row in rows:
+        text = _strip_html(row["human_note"] or "")
+        for pattern in _DIRECTIVE_PATTERNS:
+            for m in pattern.finditer(text):
+                directive = m.group(1).strip().strip(".,;:\"'")
+                if len(directive) < 5:
+                    continue
+                key = directive.lower()
+                if key not in seen:
+                    seen.add(key)
+                    directives.append(directive)
+    return directives
+
+
+async def search_from_directives(
+    directives: list[str],
+    topic_id: int,
+    results_per_directive: int = 8,
+) -> list[int]:
+    """Search S2 for each directive and link matching papers to the topic.
+
+    No keyword filter is applied — the directive text is already specific enough.
+    Returns IDs of papers newly associated with the topic.
+    """
+    from poneglyph.services.semantic_scholar import search_papers
+
+    new_ids: list[int] = []
+    for directive in directives:
+        logger.info("search_from_directives: querying S2 for directive %r", directive)
+        results = await search_papers(directive, limit=results_per_directive)
+        for s2_paper in results:
+            if not s2_paper.get("title"):
+                continue
+            fields = _s2_to_db_fields(s2_paper)
+            if not fields["title"]:
+                continue
+            pid, _ = _upsert_paper(fields)
+            newly_linked = _link_to_topic(pid, topic_id)
+            if newly_linked:
+                new_ids.append(pid)
+    logger.info(
+        "search_from_directives: topic=%d directives=%d new_papers=%d",
+        topic_id, len(directives), len(new_ids),
+    )
+    return new_ids
+
+
 async def discover_from_paper(
     paper_id: int,
     topic_id: int,

@@ -849,6 +849,134 @@ async def update_topic_note(
     return resp
 
 
+# ---------- Per-paper Q&A routes ----------
+
+def _qa_panel_response(request: Request, paper_id: int, topic_id: int) -> HTMLResponse:
+    """Render the full Q&A panel partial."""
+    rows = fetch_all(
+        "SELECT * FROM paper_qa_history WHERE paper_id = ? AND topic_id = ? "
+        "ORDER BY created_at DESC LIMIT 20",
+        (paper_id, topic_id),
+    )
+    history = [row_to_dict(r) for r in rows]
+    total = fetch_one(
+        "SELECT COUNT(*) as n FROM paper_qa_history WHERE paper_id = ? AND topic_id = ?",
+        (paper_id, topic_id),
+    )
+    total_count = total["n"] if total else 0
+    return templates.TemplateResponse(
+        "papers/partials/paper_qa.html",
+        {
+            "request": request,
+            "paper_id": paper_id,
+            "topic_id": topic_id,
+            "history": history,
+            "total_count": total_count,
+        },
+    )
+
+
+@router.get("/{paper_id}/topics/{topic_id}/qa", response_class=HTMLResponse)
+async def get_qa_panel(request: Request, paper_id: int, topic_id: int):
+    return _qa_panel_response(request, paper_id, topic_id)
+
+
+@router.post("/{paper_id}/topics/{topic_id}/qa", response_class=HTMLResponse)
+async def ask_paper_question(
+    request: Request,
+    paper_id: int,
+    topic_id: int,
+    question: str = Form(""),
+    model_choice: str = Form("haiku"),
+):
+    from poneglyph.services.llm_qa_paper import answer_paper_question
+    from poneglyph.config import settings as cfg
+
+    question = question.strip()
+    if not question:
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers("Please enter a question.", "error"))
+        return resp
+
+    paper = _get_paper(paper_id)
+    if not paper:
+        return HTMLResponse("<p>Paper not found.</p>", status_code=404)
+
+    topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
+    if not topic:
+        return HTMLResponse("<p>Topic not found.</p>", status_code=404)
+
+    tpn = _get_topic_paper_note(topic_id, paper_id)
+    deep_synthesis = (tpn.get("deep_synthesis") or None) if tpn else None
+
+    model_id = cfg.sonnet_model if model_choice == "sonnet" else cfg.haiku_model
+    answer, err = await answer_paper_question(
+        paper=paper,
+        topic=topic,
+        question=question,
+        skim_notes=tpn,
+        deep_synthesis=deep_synthesis,
+        model=model_id,
+    )
+
+    if err:
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers(err, "error"))
+        return resp
+
+    execute(
+        "INSERT INTO paper_qa_history (paper_id, topic_id, question, answer) VALUES (?, ?, ?, ?)",
+        (paper_id, topic_id, question, answer),
+    )
+    return _qa_panel_response(request, paper_id, topic_id)
+
+
+@router.post("/{paper_id}/topics/{topic_id}/qa/{qa_id}/save-to-note", response_class=HTMLResponse)
+async def save_qa_to_note(request: Request, paper_id: int, topic_id: int, qa_id: int):
+    from poneglyph.pipeline import _ensure_topic_paper_note
+    row = row_to_dict(fetch_one("SELECT * FROM paper_qa_history WHERE id = ?", (qa_id,)))
+    if not row:
+        resp = HTMLResponse("")
+        resp.headers["HX-Reswap"] = "none"
+        resp.headers.update(_toast_headers("Q&A entry not found.", "error"))
+        return resp
+
+    _ensure_topic_paper_note(topic_id, paper_id)
+    tpn = _get_topic_paper_note(topic_id, paper_id)
+    existing = (tpn.get("human_note") or "") if tpn else ""
+
+    # Always append at the end of whatever is already in the note — never replace.
+    # If the note already has content, the Q&A block is added after it.
+    # The user can then rearrange or delete entries by opening the Quill editor.
+    q_escaped = escape(row["question"])
+    a_escaped = escape(row["answer"]).replace("\n", "<br>")
+    block = (
+        f"<p><strong>Q:</strong> {q_escaped}</p>"
+        f"<p><strong>A:</strong> {a_escaped}</p>"
+        f"<hr>"
+    )
+    new_note = existing + block  # append unconditionally; existing is "" if note was empty
+    execute(
+        "UPDATE topic_paper_notes SET human_note = ? WHERE topic_id = ? AND paper_id = ?",
+        (new_note, topic_id, paper_id),
+    )
+    # Re-render the human note section so the user sees the appended content immediately
+    resp = templates.TemplateResponse(
+        "papers/partials/human_note.html",
+        {"request": request, "paper_id": paper_id, "topic_id": topic_id, "topic_note": new_note},
+    )
+    resp.headers.update(_toast_headers("Added to note"))
+    return resp
+
+
+@router.delete("/{paper_id}/topics/{topic_id}/qa/{qa_id}", response_class=HTMLResponse)
+async def delete_qa_item(request: Request, paper_id: int, topic_id: int, qa_id: int):
+    execute("DELETE FROM paper_qa_history WHERE id = ?", (qa_id,))
+    return HTMLResponse("")
+
+
 # ---------- Deep synthesis routes ----------
 
 def _deep_error(msg: str) -> HTMLResponse:

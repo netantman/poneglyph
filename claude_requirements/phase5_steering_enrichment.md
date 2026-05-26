@@ -26,6 +26,11 @@ Not yet implemented:
 - Relevance re-scoring on steering changes
 - Human note aggregation → LLM auto-suggest
 
+Implemented (note-driven scouting — see phase2 doc):
+- Human notes are scanned for trigger phrases ("for future scouting", "find me the papers", etc.)
+  at each Scout Now run. Matched directives are used as S2 free-text queries; results are
+  linked to the topic and synthesized with the skim skill.
+
 ## Dependencies
 - Phase 2 (scouting pipeline)
 - Phase 3 (embeddings for relevance re-scoring on steering changes)

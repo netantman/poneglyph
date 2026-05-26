@@ -100,6 +100,14 @@ async def search_paper(title: str, limit: int = 3) -> dict | None:
     return results[0] if results else None
 
 
+async def search_papers(query: str, limit: int = 10) -> list[dict]:
+    """Free-text search returning up to `limit` results."""
+    data = await _get("/paper/search", {"query": query, "fields": _PAPER_FIELDS, "limit": min(limit, 100)})
+    if not data:
+        return []
+    return [r for r in (data.get("data") or []) if r.get("paperId") and r.get("title")]
+
+
 async def get_citations(s2_id: str, limit: int = 100) -> list[dict]:
     """Papers that CITE this paper."""
     return await _fetch_paged(f"/paper/{s2_id}/citations", "citingPaper", limit)
