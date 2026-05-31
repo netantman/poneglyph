@@ -29,6 +29,10 @@
         <input type="text" name="pdf_local_path" value="{{ paper.pdf_local_path }}">
     </label>
     {% endif %}
+    <label>OneNote Link <small>(optional)</small>
+        <input type="url" name="onenote_url" value="{{ paper.onenote_url or '' }}"
+               placeholder="https://onedrive.live.com/...">
+    </label>
     <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
         <button type="submit" style="font-size: 0.85rem; padding: 0.35rem 0.7rem; width: auto; margin: 0;">
             Save <span id="info-save-ind" class="htmx-indicator"><span class="spinner"></span></span>
@@ -53,6 +57,11 @@
 {% if paper.url %}
 <p style="margin: 0 0 0.4rem 0; font-size: 0.85rem;">
     <a href="{{ paper.url }}" target="_blank" rel="noopener" style="color: var(--pico-muted-color);">{{ paper.url }}</a>
+</p>
+{% endif %}
+{% if paper.onenote_url %}
+<p style="margin: 0 0 0.4rem 0; font-size: 0.85rem;">
+    📓 <a href="{{ paper.onenote_url }}" target="_blank" rel="noopener" style="color: var(--pico-muted-color);">OneNote</a>
 </p>
 {% endif %}
 <hr style="margin: 0.4rem 0 0.75rem 0; border: none; border-top: 1px solid #555;">

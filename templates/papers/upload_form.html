@@ -1,7 +1,7 @@
 <article>
     <header>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <strong>Add Paper</strong>
+            <strong>Add Literature</strong>
             <button class="outline secondary" style="margin:0; padding: 0.2rem 0.6rem;"
                     onclick="document.getElementById('upload-form-area').innerHTML=''">
                 Cancel
@@ -23,7 +23,21 @@
 
         <input type="hidden" name="pdf_tmp_id" value="{{ pdf_tmp_id or '' }}">
 
-        <label>Title
+        <!-- Content-type toggle -->
+        <div style="display: flex; gap: 1.5rem; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--pico-form-element-border-color);">
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                <input type="radio" name="content_type" value="academic" checked
+                       onchange="setUploadType('paper')" style="margin: 0;">
+                Paper
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
+                <input type="radio" name="content_type" value="book"
+                       onchange="setUploadType('book')" style="margin: 0;">
+                Book
+            </label>
+        </div>
+
+        <label><span id="title-label">Title</span>
             <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
                 <div style="flex: 1;">
                     <input type="text" name="title" id="title-input"
@@ -51,28 +65,31 @@
                    placeholder="e.g. John Smith, Jane Doe">
         </label>
 
-        <label>URL <small>(arXiv or DOI auto-extracts metadata)</small>
-            <input type="url" name="url" id="url-input"
-                   value="{{ prefill.url if prefill and prefill.url else '' }}"
-                   placeholder="https://arxiv.org/abs/... or https://doi.org/...">
-        </label>
-
-        <label>Abstract / Executive Summary
-            <textarea name="abstract" id="abstract-input" rows="3"
-                      placeholder="Paste the abstract or executive summary">{{ prefill.abstract if prefill and prefill.abstract else '' }}</textarea>
-        </label>
-
-        <div class="grid">
-            <label>Published Venue
-                <input type="text" name="published_venue" id="venue-input"
-                       value="{{ prefill.published_venue if prefill and prefill.published_venue else '' }}"
-                       placeholder="e.g. Journal of Finance">
+        <!-- Paper-only fields: URL, Abstract, Venue/Date -->
+        <div id="paper-only-fields">
+            <label>URL <small>(arXiv or DOI auto-extracts metadata)</small>
+                <input type="url" name="url" id="url-input"
+                       value="{{ prefill.url if prefill and prefill.url else '' }}"
+                       placeholder="https://arxiv.org/abs/... or https://doi.org/...">
             </label>
-            <label>Published Date
-                <input type="text" name="published_date" id="date-input"
-                       value="{{ prefill.published_date if prefill and prefill.published_date else '' }}"
-                       placeholder="e.g. 2024-03-15">
+
+            <label>Abstract / Executive Summary
+                <textarea name="abstract" id="abstract-input" rows="3"
+                          placeholder="Paste the abstract or executive summary">{{ prefill.abstract if prefill and prefill.abstract else '' }}</textarea>
             </label>
+
+            <div class="grid">
+                <label>Published Venue
+                    <input type="text" name="published_venue" id="venue-input"
+                           value="{{ prefill.published_venue if prefill and prefill.published_venue else '' }}"
+                           placeholder="e.g. Journal of Finance">
+                </label>
+                <label>Published Date
+                    <input type="text" name="published_date" id="date-input"
+                           value="{{ prefill.published_date if prefill and prefill.published_date else '' }}"
+                           placeholder="e.g. 2024-03-15">
+                </label>
+            </div>
         </div>
 
         <fieldset>
@@ -87,6 +104,13 @@
             {% if not all_topics %}
             <small style="color: var(--pico-muted-color);">No topics yet — <a href="/topics">create one first</a></small>
             {% endif %}
+            <div id="run-skim-toggle" style="margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--pico-form-element-border-color);">
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;"
+                       title="Run the structural skim (Haiku) for each selected topic that has a skim skill configured">
+                    <input type="checkbox" name="run_synthesis" value="1" checked style="margin: 0;">
+                    Run structural skim after adding
+                </label>
+            </div>
         </fieldset>
 
         <!-- PDF section -->
@@ -100,7 +124,7 @@
             <input type="hidden" name="pdf_mode" value="upload">
             <label>Save to folder
                 <select name="pdf_subfolder">
-                    <option value="">— Select folder —</option>
+                    <option value="">None, existing location</option>
                     {% for sf in subfolders %}
                     <option value="{{ sf }}" {% if sf == (pdf_subfolder_selected or 'Public-Academia') %}selected{% endif %}>{{ sf }}</option>
                     {% endfor %}
@@ -118,9 +142,10 @@
             <input type="hidden" name="pdf_existing_relpath" value="{{ pdf_linked_relpath }}">
         </fieldset>
         {% else %}
-        <fieldset>
+        <!-- Paper PDF section -->
+        <fieldset id="paper-pdf-fieldset">
             <legend>PDF</legend>
-            <div style="display: flex; gap: 1.5rem; margin-bottom: 0.75rem;">
+            <div id="pdf-mode-radios" style="display: flex; gap: 1.5rem; margin-bottom: 0.75rem;">
                 <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: normal; cursor: pointer;">
                     <input type="radio" name="pdf_mode" value="upload" checked
                            onchange="setPdfMode('upload')" style="margin: 0;">
@@ -138,24 +163,33 @@
                 </label>
             </div>
 
-            <!-- Upload new -->
+            <!-- Upload new (paper: file + subfolder; book: file only + save-location note) -->
             <div id="pdf-upload-section">
-                <div class="grid">
+                <div class="grid" id="paper-subfolder-row">
                     <label>File
-                        <input type="file" name="pdf_file" accept=".pdf">
+                        <input type="file" name="pdf_file" accept=".pdf" id="pdf-file-input">
                     </label>
                     <label>Save to folder
-                        <select name="pdf_subfolder">
-                            <option value="">— Select folder —</option>
+                        <select name="pdf_subfolder" id="pdf-subfolder-select">
+                            <option value="">None, existing location</option>
                             {% for sf in subfolders %}
                             <option value="{{ sf }}" {% if sf == 'Public-Academia' %}selected{% endif %}>{{ sf }}</option>
                             {% endfor %}
                         </select>
                     </label>
                 </div>
+                <!-- Book mode: single-column file input + save location note -->
+                <div id="book-upload-row" style="display: none;">
+                    <label>File <small>(optional)</small>
+                        <input type="file" name="pdf_file" accept=".pdf" id="book-pdf-file-input" disabled>
+                    </label>
+                    <p style="font-size: 0.85rem; color: var(--pico-muted-color); margin-top: 0.25rem;">
+                        Saved to: <code>{{ ebook_library_dir }}</code>
+                    </p>
+                </div>
             </div>
 
-            <!-- Link existing -->
+            <!-- Link existing (paper only) -->
             <div id="pdf-link-section" style="display: none;">
                 <label>File
                     <input type="text" name="pdf_existing_relpath" id="pdf-existing-file-input"
@@ -170,7 +204,15 @@
         </fieldset>
         {% endif %}
 
-        <button type="submit">
+        <!-- Book-only: OneNote link -->
+        <div id="book-only-fields" style="display: none;">
+            <label>OneNote Link <small>(optional)</small>
+                <input type="url" name="onenote_url" id="onenote-url-input"
+                       placeholder="https://onedrive.live.com/...">
+            </label>
+        </div>
+
+        <button type="submit" id="upload-submit-btn">
             Upload Paper <span id="upload-submit-ind" class="htmx-indicator"><span class="spinner"></span></span>
         </button>
     </form>
@@ -180,6 +222,59 @@
 function setPdfMode(mode) {
     document.getElementById('pdf-upload-section').style.display = mode === 'upload' ? '' : 'none';
     document.getElementById('pdf-link-section').style.display = mode === 'link' ? '' : 'none';
+}
+
+function setUploadType(type) {
+    var isBook = (type === 'book');
+
+    // Paper-only fields: URL, Abstract, Venue/Date
+    document.getElementById('paper-only-fields').style.display = isBook ? 'none' : '';
+
+    // Book-only fields: OneNote link
+    document.getElementById('book-only-fields').style.display = isBook ? '' : 'none';
+
+    // Run skim toggle (books don't get skimmed)
+    document.getElementById('run-skim-toggle').style.display = isBook ? 'none' : '';
+
+    // PDF section visibility (only applies when the full PDF fieldset is shown)
+    var modeRadios = document.getElementById('pdf-mode-radios');
+    var paperSubfolderRow = document.getElementById('paper-subfolder-row');
+    var bookUploadRow = document.getElementById('book-upload-row');
+    var pdfLinkSection = document.getElementById('pdf-link-section');
+    if (modeRadios) modeRadios.style.display = isBook ? 'none' : '';
+    if (paperSubfolderRow) paperSubfolderRow.style.display = isBook ? 'none' : '';
+    if (bookUploadRow) bookUploadRow.style.display = isBook ? '' : 'none';
+    if (pdfLinkSection && isBook) pdfLinkSection.style.display = 'none';
+
+    // Disable the inactive file input so only one pdf_file is submitted
+    var paperFileInput = document.getElementById('pdf-file-input');
+    var bookFileInput = document.getElementById('book-pdf-file-input');
+    if (paperFileInput) paperFileInput.disabled = isBook;
+    if (bookFileInput) bookFileInput.disabled = !isBook;
+
+    // For books, force upload mode radio to be checked so server sees pdf_mode=upload
+    if (isBook) {
+        var uploadRadio = document.querySelector('input[name="pdf_mode"][value="upload"]');
+        if (uploadRadio) uploadRadio.checked = true;
+        document.getElementById('pdf-upload-section').style.display = '';
+    }
+
+    // Title placeholder
+    var titleInput = document.getElementById('title-input');
+    if (titleInput) {
+        titleInput.placeholder = isBook
+            ? 'Book name'
+            : 'Paper title (auto-extracted if uploading PDF or recognised URL)';
+    }
+
+    // Submit button
+    var btn = document.getElementById('upload-submit-btn');
+    if (btn) {
+        // Keep the spinner span, just update the text node
+        var ind = document.getElementById('upload-submit-ind');
+        btn.textContent = isBook ? 'Add Book ' : 'Upload Paper ';
+        if (ind) btn.appendChild(ind);
+    }
 }
 
 function fillSearchedMetadata(card) {

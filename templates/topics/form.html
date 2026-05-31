@@ -10,7 +10,7 @@
             </button>
         </div>
     </header>
-    <form hx-post="/topics" hx-target="#topic-list" hx-swap="afterbegin"
+    <form hx-post="/topics" hx-target="#topic-tbody" hx-swap="afterbegin"
           hx-on::after-request="if(event.detail.successful) document.getElementById('topic-form-area').innerHTML=''">
         {% include "topics/partials/form_fields.html" %}
         <button type="submit">Create Topic <span class="htmx-indicator"><span class="spinner"></span></span></button>

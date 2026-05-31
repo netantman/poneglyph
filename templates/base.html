@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+            onload="window._katexReady = true; if(window._katexReadyCb) window._katexReadyCb();"></script>
     <style>
         :root {
             --pico-font-size: 15px;
@@ -213,6 +217,29 @@
             background: var(--pico-primary-background);
             color: var(--pico-primary-inverse);
         }
+        /* Shared htmx modal */
+        #htmx-modal::backdrop { background: rgba(0,0,0,0.55); }
+        #htmx-modal {
+            background: var(--pico-card-background-color);
+            border: 1px solid var(--pico-card-border-color);
+            border-radius: 0.5rem;
+            padding: 0;
+            width: min(640px, 92vw);
+            max-height: 80vh;
+            overflow-y: auto;
+            color: var(--pico-color);
+        }
+        .modal-inner { padding: 1.25rem 1.5rem; }
+        .modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 0.85rem;
+        }
+        .modal-header h4 { margin: 0; font-size: 1rem; }
+        .modal-close {
+            background: none; border: none; cursor: pointer;
+            font-size: 1.2rem; color: var(--pico-muted-color);
+            padding: 0.1rem 0.3rem; margin: 0; line-height: 1;
+        }
         /* Link insert dialog */
         #link-dialog-overlay {
             display: none;
@@ -231,7 +258,6 @@
     <nav class="container">
         <ul>
             <li><a href="/"><strong>Dashboard</strong></a></li>
-            <li><a href="/authors">Authors</a></li>
         </ul>
         <ul style="align-items:center;">
             <li>
@@ -250,8 +276,18 @@
     </main>
 
 <div id="toast-container"></div>
+<dialog id="htmx-modal"><div id="modal-body"></div></dialog>
 
     <script>
+        // Shared htmx modal
+        var _htmxModal = document.getElementById('htmx-modal');
+        function openModal() { _htmxModal.showModal(); }
+        function closeModal() { _htmxModal.close(); }
+        _htmxModal.addEventListener('click', function(e) {
+            if (e.target === _htmxModal) _htmxModal.close();
+        });
+        document.body.addEventListener('closeModal', function() { closeModal(); });
+
         // Dark mode toggle
         (function() {
             const saved = localStorage.getItem('poneglyph-theme');
@@ -303,14 +339,32 @@
             showToast('Request failed — check your connection', 'error');
         });
 
-        // Render all [data-md] elements with marked.js (on load and after htmx swaps)
+        // Render all [data-md] elements with marked.js + KaTeX (on load and after htmx swaps)
+        var _katexOpts = {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$',  right: '$',  display: false},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+        };
         function renderMdElements(root) {
             (root || document).querySelectorAll('[data-md]').forEach(function(el) {
                 if (el.dataset.mdRendered) return;
                 el.innerHTML = marked.parse(el.dataset.md || '');
                 el.dataset.mdRendered = '1';
+                if (window._katexReady && window.renderMathInElement) {
+                    renderMathInElement(el, _katexOpts);
+                }
             });
         }
+        // If KaTeX loads after DOMContentLoaded, re-render any already-rendered elements
+        window._katexReadyCb = function() {
+            document.querySelectorAll('[data-md-rendered]').forEach(function(el) {
+                renderMathInElement(el, _katexOpts);
+            });
+        };
         document.addEventListener('DOMContentLoaded', function() { renderMdElements(); });
         document.addEventListener('htmx:afterSwap', function(e) { renderMdElements(e.detail.target); });
     </script>

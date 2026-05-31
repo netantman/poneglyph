@@ -1,0 +1,21 @@
+{% set editor_id = "skim" if skill_name == "skim" else "deep" %}
+{% set skill_value = topic.skim_skill_md if skill_name == "skim" else topic.deep_synthesis_skill_md %}
+<div id="skill-editor-{{ editor_id }}-{{ topic.id }}">
+    {% if skill_value %}
+    <a style="font-size:0.82rem; color:#16a34a; cursor:pointer;"
+       hx-get="/topics/{{ topic.id }}/skills/{{ skill_name }}/view"
+       hx-target="#modal-body"
+       hx-swap="innerHTML"
+       hx-on::after-request="openModal()">
+        ✓ Set
+    </a>
+    {% else %}
+    <a style="font-size:0.82rem; color:var(--pico-muted-color); cursor:pointer;"
+       hx-get="/topics/{{ topic.id }}/skills/{{ skill_name }}/view"
+       hx-target="#modal-body"
+       hx-swap="innerHTML"
+       hx-on::after-request="openModal()">
+        ✗ None
+    </a>
+    {% endif %}
+</div>

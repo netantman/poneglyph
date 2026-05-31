@@ -1,23 +1,22 @@
-<article class="topic-row" id="topic-{{ topic.id }}">
-    <header>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
+<tr id="topic-{{ topic.id }}">
+    <!-- Col 1: Topic name + badges + actions -->
+    <td>
+        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                 <a href="/topics/{{ topic.id }}"><strong>{{ topic.name }}</strong></a>
                 {% if topic.is_active %}
-                    <span class="badge badge-active">Active</span>
+                    <span class="badge badge-active" style="font-size:0.72rem;">Active</span>
                 {% else %}
-                    <span class="badge badge-inactive">Paused</span>
+                    <span class="badge badge-inactive" style="font-size:0.72rem;">Paused</span>
                 {% endif %}
+                <span id="ind-{{ topic.id }}" class="htmx-indicator"><span class="spinner" style="width:0.7em;height:0.7em;"></span></span>
             </div>
-            <div class="actions">
-                <button class="outline secondary"
-                        hx-get="/topics/{{ topic.id }}/edit"
-                        hx-target="#topic-form-area"
-                        hx-swap="innerHTML"
-                        hx-indicator="#ind-{{ topic.id }}">
-                    Edit
-                </button>
+            {% if topic.description %}
+            <div style="font-size:0.8rem; color:var(--pico-muted-color);">{{ topic.description }}</div>
+            {% endif %}
+            <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-top:0.1rem;">
                 <button class="outline"
+                        style="font-size:0.75rem; padding:0.1rem 0.45rem; margin:0; width:auto;"
                         hx-post="/topics/{{ topic.id }}/toggle"
                         hx-target="#topic-{{ topic.id }}"
                         hx-swap="outerHTML"
@@ -25,6 +24,7 @@
                     {% if topic.is_active %}Pause{% else %}Resume{% endif %}
                 </button>
                 <button class="outline contrast"
+                        style="font-size:0.75rem; padding:0.1rem 0.45rem; margin:0; width:auto;"
                         hx-delete="/topics/{{ topic.id }}"
                         hx-target="#topic-{{ topic.id }}"
                         hx-swap="outerHTML"
@@ -32,50 +32,62 @@
                         hx-indicator="#ind-{{ topic.id }}">
                     Delete
                 </button>
-                <span id="ind-{{ topic.id }}" class="htmx-indicator"><span class="spinner"></span></span>
             </div>
         </div>
-    </header>
+    </td>
 
-    {% if topic.description %}
-        <p>{{ topic.description }}</p>
-    {% endif %}
-
-    <div style="margin-bottom: 0.5rem;">
-        <strong>Keywords:</strong>
-        {% for kw in topic.keywords %}
-            <span class="keyword-tag">{{ kw }}</span>
-        {% endfor %}
-        {% if not topic.keywords %}
-            <em style="color: var(--pico-muted-color);">none</em>
+    <!-- Col 2: Keywords -->
+    <td>
+        {% set kw_count = (topic.keywords | length) + (topic.priority_keywords | length) %}
+        {% if kw_count > 0 %}
+        <details class="kw-popover">
+            <summary>
+                <span style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:1rem;
+                             background:var(--pico-card-sectioning-background-color);
+                             border:1px solid var(--pico-card-border-color); cursor:pointer;">
+                    {{ kw_count }} keyword{{ 's' if kw_count != 1 else '' }}
+                </span>
+            </summary>
+            <div class="kw-drop">
+                {% if topic.priority_keywords %}
+                <div style="margin-bottom:0.35rem;">
+                    <strong style="font-size:0.78rem; color:var(--pico-muted-color);">Priority</strong><br>
+                    {% for kw in topic.priority_keywords %}
+                    <span class="keyword-tag priority" style="font-size:0.78rem;">{{ kw }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if topic.keywords %}
+                <div>
+                    <strong style="font-size:0.78rem; color:var(--pico-muted-color);">Keywords</strong><br>
+                    {% for kw in topic.keywords %}
+                    <span class="keyword-tag" style="font-size:0.78rem;">{{ kw }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </details>
+        {% else %}
+        <span style="font-size:0.8rem; color:var(--pico-muted-color);">—</span>
         {% endif %}
-    </div>
+    </td>
 
-    {% if topic.priority_keywords %}
-    <div style="margin-bottom: 0.5rem;">
-        <strong>Priority:</strong>
-        {% for kw in topic.priority_keywords %}
-            <span class="keyword-tag priority">{{ kw }}</span>
-        {% endfor %}
-    </div>
-    {% endif %}
+    <!-- Col 3: Problem Statements -->
+    <td>
+        {% set ps_count = topic.problem_statements | length %}
+        {% if ps_count > 0 %}
+        <a style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:1rem;
+                  background:var(--pico-card-sectioning-background-color);
+                  border:1px solid var(--pico-card-border-color); cursor:pointer; text-decoration:none;"
+           hx-get="/topics/{{ topic.id }}/problem-statements"
+           hx-target="#modal-body"
+           hx-swap="innerHTML"
+           hx-on::after-request="openModal()">
+            {{ ps_count }} statement{{ 's' if ps_count != 1 else '' }}
+        </a>
+        {% else %}
+        <span style="font-size:0.8rem; color:var(--pico-muted-color);">—</span>
+        {% endif %}
+    </td>
 
-    {% if topic.problem_statements %}
-    <details>
-        <summary>Problem Statements ({{ topic.problem_statements | length }})</summary>
-        <ul>
-            {% for ps in topic.problem_statements %}
-                <li>{{ ps }}</li>
-            {% endfor %}
-        </ul>
-    </details>
-    {% endif %}
-
-    <footer>
-        <small>
-            {% if topic.skim_skill_md %}Skim: ✓{% else %}Skim: ✗{% endif %}
-            &middot;
-            {% if topic.deep_synthesis_skill_md %}Deep: ✓{% else %}Deep: ✗{% endif %}
-        </small>
-    </footer>
-</article>
+</tr>

@@ -159,6 +159,19 @@ def extract_pdf_text_with_pages(path: Path, max_chars: int = 80_000) -> str:
         return ""
 
 
+def get_ebook_library_dir() -> Path:
+    return Path(settings.ebook_library_dir)
+
+
+def save_ebook_pdf(content: bytes, filename: str) -> Path:
+    """Save PDF bytes directly into ebook_library_dir (flat, no subfolder). Returns full path."""
+    dest_dir = get_ebook_library_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / filename
+    dest.write_bytes(content)
+    return dest
+
+
 def copy_to_working_papers(pdf_path: Path, filename: str) -> Path:
     """Copy PDF to ~/Desktop/poneglyph_working_papers/."""
     desktop = Path.home() / "Desktop"

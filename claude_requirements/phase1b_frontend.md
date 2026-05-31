@@ -56,6 +56,16 @@
 - [x] arXiv URL auto-extraction uses last revised date (`atom:updated`) rather than first submitted (`atom:published`)
 - [x] Delete paper button on paper detail page with confirmation dialog
 
+### Topics list page layout ✅
+- [x] `/topics` displays topics as a **5-column table** (replacing the card-per-topic layout):
+  - **Topic** — name as link to `/topics/{id}`, Active/Paused badge, Edit / Pause / Delete action buttons
+  - **Keywords** — count badge (`<details>` popover) listing priority + regular keywords
+  - **Problem Statements** — count badge (`<details>` popover) listing all statements as a numbered list
+  - **Skim Skill** — "✓ Set" (green) or "✗ None" (muted); clicking opens inline skill editor via htmx in the cell
+  - **Deep Synthesis** — same as Skim Skill
+- Create form targets `#topic-tbody afterbegin`; edit/delete target `#topic-{id} outerHTML` — all htmx wiring unchanged
+- `<details class="kw-popover">` with absolute-positioned `.kw-drop` panel; CSS lives in `list.html`
+
 ### Read Next flag
 - [x] "Read Next" toggle on paper list page — clickable 🔖/📄 icon as a column per row, toggles via htmx without page reload
 - [x] "Read Next" toggle on paper detail page — next to the paper title in Paper Info section

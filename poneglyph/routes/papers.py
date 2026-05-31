@@ -15,9 +15,11 @@ from poneglyph.services.arxiv_fetch import extract_arxiv_id, fetch_arxiv_metadat
 from poneglyph.services.crossref_fetch import extract_doi, fetch_crossref_metadata, is_doi_url, search_by_title
 from poneglyph.services.pdf_manager import (
     build_pdf_filename, copy_to_working_papers, get_pdf_base_dir, list_all_pdf_files,
-    list_pdf_files, list_subfolders, move_pdf, save_pdf,
+    list_pdf_files, list_subfolders, move_pdf, save_ebook_pdf, save_pdf,
+    _sanitize_filename,
 )
 from poneglyph.services.llm_metadata import extract_metadata_from_pdf
+from poneglyph.routes.topics import parse_skim_labels
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
@@ -70,11 +72,13 @@ async def list_papers(
     request: Request,
     topic_id: str | None = None,
     read_next: str | None = None,
+    books_only: str | None = None,
     q: str = "",
 ):
-    """List all papers, optionally filtered by topic, read_next flag, and/or search query."""
+    """List all papers, optionally filtered by topic, read_next flag, books_only, and/or search query."""
     topic_id_int = int(topic_id) if topic_id and topic_id.strip().isdigit() else None
     read_next_filter = read_next == "1"
+    books_only_filter = books_only == "1"
     q = q.strip()
 
     if topic_id_int:
@@ -85,6 +89,8 @@ async def list_papers(
         params: list = [topic_id_int]
         if read_next_filter:
             sql += " AND p.read_next = 1"
+        if books_only_filter:
+            sql += " AND p.content_type = 'book'"
         if q:
             sql += " AND (LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)"
             like = f"%{q.lower()}%"
@@ -97,6 +103,8 @@ async def list_papers(
         params = []
         if read_next_filter:
             conditions.append("p.read_next = 1")
+        if books_only_filter:
+            conditions.append("p.content_type = 'book'")
         if q:
             conditions.append("(LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)")
             like = f"%{q.lower()}%"
@@ -118,6 +126,7 @@ async def list_papers(
         "all_topics": all_topics,
         "topic_id": topic_id_int,
         "read_next_filter": read_next_filter,
+        "books_only_filter": books_only_filter,
         "q": q,
     }
 
@@ -142,6 +151,7 @@ async def upload_form(request: Request, topic_id: int | None = None):
             "request": request, "all_topics": all_topics,
             "preselected_ids": preselected_ids, "subfolders": subfolders,
             "all_pdf_files": all_pdf_files,
+            "ebook_library_dir": settings.ebook_library_dir,
         },
     )
 
@@ -207,11 +217,14 @@ async def upload_paper(
     published_venue: str = Form(""),
     published_date: str = Form(""),
     topic_ids: list[int] = Form(default=[]),
+    run_synthesis: bool = Form(False),  # checkbox: present = True, absent = False
+    content_type: str = Form("academic"),
     pdf_mode: str = Form("upload"),
     pdf_file: UploadFile | None = File(None),
     pdf_subfolder: str = Form(""),
     pdf_existing_relpath: str = Form(""),
     pdf_tmp_id: str = Form(""),  # carry temp PDF across the LLM-failure re-render
+    onenote_url: str = Form(""),
 ):
     title = title.strip()
     url = url.strip()
@@ -219,6 +232,7 @@ async def upload_paper(
     pdf_tmp_id = pdf_tmp_id.strip()
     authors_list = [a.strip() for a in authors.split(",") if a.strip()]
     pdf_url = ""
+    content_type = content_type.strip() if content_type.strip() in ("academic", "article", "note", "book") else "academic"
 
     # Resolve PDF source: uploaded file, link to existing file, or previously saved temp
     has_uploaded = pdf_file and pdf_file.filename and pdf_file.size and pdf_file.size > 0
@@ -248,6 +262,57 @@ async def upload_paper(
 
     pdf_path_for_extraction: Path | None = linked_pdf_path or pdf_tmp_path
     has_any_pdf = bool(pdf_content or linked_pdf_path)
+
+    # -------- Book fast-path: skip all LLM / API metadata, fixed save path --------
+    if content_type == "book":
+        if not title:
+            resp = HTMLResponse(
+                '<p style="color:var(--pico-del-color); margin:0;">Book name is required.</p>',
+            )
+            resp.headers["HX-Reswap"] = "none"
+            resp.headers.update(_toast_headers("Book name is required.", "error"))
+            return resp
+        # Dedup by title only
+        book_existing = row_to_dict(fetch_one("SELECT * FROM papers WHERE title = ?", (title,)))
+        if book_existing:
+            book_paper_id = book_existing["id"]
+            book_msg = f"Book '{book_existing['title']}' already exists"
+        else:
+            onenote_url_clean = onenote_url.strip() or None
+            book_paper_id = execute(
+                """INSERT INTO papers (source, source_id, title, authors, content_type, onenote_url)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                ("manual", str(uuid.uuid4()), title, json.dumps(authors_list), "book", onenote_url_clean),
+            )
+            _ensure_paper_note(book_paper_id)
+            if pdf_content:
+                filename = _sanitize_filename(title) + ".pdf"
+                dest = save_ebook_pdf(pdf_content, filename)
+                execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), book_paper_id))
+            book_msg = f"Book '{title}' added"
+
+        if pdf_tmp_path and pdf_tmp_path.exists():
+            pdf_tmp_path.unlink(missing_ok=True)
+
+        book_linked = 0
+        for tid in topic_ids:
+            already = fetch_one(
+                "SELECT id FROM topic_papers WHERE topic_id = ? AND paper_id = ?",
+                (tid, book_paper_id),
+            )
+            if not already:
+                execute("INSERT INTO topic_papers (topic_id, paper_id) VALUES (?, ?)", (tid, book_paper_id))
+                book_linked += 1
+        if book_linked:
+            book_msg += f" — linked to {book_linked} topic{'s' if book_linked > 1 else ''}"
+
+        if request.headers.get("HX-Request"):
+            resp = HTMLResponse("")
+            resp.headers["HX-Redirect"] = f"/papers/{book_paper_id}"
+            resp.headers.update(_toast_headers(book_msg))
+            return resp
+        return RedirectResponse(f"/papers/{book_paper_id}", status_code=303)
+    # -------- end book fast-path --------
 
     # Priority 2: source API metadata (arXiv or DOI/CrossRef)
     source = "manual"
@@ -315,23 +380,29 @@ async def upload_paper(
             if title or abstract:
                 meta_source_msg = "Metadata extracted from PDF"
 
-    # Priority 4: auto-resolve DOI via CrossRef title search for manual papers with no URL yet
+    # Priority 4: auto-resolve DOI via CrossRef title search for manual papers with no URL yet.
+    # Guard: only apply if CrossRef returns a title similar enough to the input (ratio >= 0.6).
+    # This prevents a keyword-overlapping but different paper from hijacking the upload.
     if source == "manual" and title and not url:
         doi_meta = await search_by_title(title)
         if doi_meta:
-            url = doi_meta.get("url", "")
-            if not authors_list:
-                authors_list = doi_meta.get("authors") or []
-            if not abstract:
-                abstract = doi_meta.get("abstract") or ""
-            if not published_date.strip():
-                published_date = doi_meta.get("published_date") or ""
-            if not published_venue.strip():
-                published_venue = doi_meta.get("published_venue") or ""
-            if meta_source_msg:
-                meta_source_msg += " + DOI resolved"
-            else:
-                meta_source_msg = "DOI resolved from title"
+            from difflib import SequenceMatcher
+            returned_title = doi_meta.get("title", "")
+            _similarity = SequenceMatcher(None, title.lower(), returned_title.lower()).ratio()
+            if _similarity >= 0.6:
+                url = doi_meta.get("url", "")
+                if not authors_list:
+                    authors_list = doi_meta.get("authors") or []
+                if not abstract:
+                    abstract = doi_meta.get("abstract") or ""
+                if not published_date.strip():
+                    published_date = doi_meta.get("published_date") or ""
+                if not published_venue.strip():
+                    published_venue = doi_meta.get("published_venue") or ""
+                if meta_source_msg:
+                    meta_source_msg += " + DOI resolved"
+                else:
+                    meta_source_msg = "DOI resolved from title"
 
     # If title still missing after LLM and we have a PDF, re-render form with inline prompt
     if not title and (pdf_tmp_path or linked_pdf_path):
@@ -349,6 +420,7 @@ async def upload_paper(
                 "pdf_tmp_id": pdf_tmp_id,
                 "pdf_linked_relpath": pdf_existing_relpath.strip() if linked_pdf_path else "",
                 "pdf_subfolder_selected": pdf_subfolder.strip(),
+                "ebook_library_dir": settings.ebook_library_dir,
                 "llm_message": (
                     "Could not extract the title from the PDF automatically. "
                     "Enter the title below — you can search CrossRef to auto-fill the rest of the metadata."
@@ -413,9 +485,16 @@ async def upload_paper(
 
     # Save / link PDF
     if pdf_content and pdf_subfolder.strip():
+        # Normal path: copy to chosen subfolder with naming convention applied
         year = (published_date.strip()[:4]) if published_date.strip() else None
         filename = build_pdf_filename(pdf_subfolder.strip(), title, authors_list, year)
         dest = save_pdf(pdf_content, pdf_subfolder.strip(), filename)
+        execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), paper_id))
+    elif pdf_content and not pdf_subfolder.strip():
+        # "None, existing location" selected: keep the file in data/pdfs/ with no subfolder,
+        # no naming convention — just a sanitized title filename. Record that path.
+        filename = _sanitize_filename(title or str(uuid.uuid4())) + ".pdf"
+        dest = save_pdf(pdf_content, "", filename)
         execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), paper_id))
     elif linked_pdf_path:
         execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(linked_pdf_path), paper_id))
@@ -439,22 +518,23 @@ async def upload_paper(
     if linked_count:
         msg += f" — linked to {linked_count} topic{'s' if linked_count > 1 else ''}"
 
-    # Score and auto-skim for each newly-linked topic
+    # Score and (optionally) auto-skim for each newly-linked topic
     if newly_linked_topic_ids:
         paper_row = row_to_dict(fetch_one("SELECT * FROM papers WHERE id = ?", (paper_id,)))
         if paper_row:
             from poneglyph.services.relevance import update_paper_all_topic_scores
             update_paper_all_topic_scores(paper_id, paper_row)
-        from poneglyph.pipeline import _synthesize_paper
-        import logging as _logging
-        _log = _logging.getLogger(__name__)
-        for tid in newly_linked_topic_ids:
-            topic_row = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (tid,)))
-            if topic_row and topic_row.get("skim_skill_md"):
-                try:
-                    await _synthesize_paper(paper_id, topic_row)
-                except Exception as _exc:
-                    _log.warning("auto-skim failed for paper=%d topic=%d: %s", paper_id, tid, _exc)
+        if run_synthesis:
+            from poneglyph.pipeline import _synthesize_paper
+            import logging as _logging
+            _log = _logging.getLogger(__name__)
+            for tid in newly_linked_topic_ids:
+                topic_row = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (tid,)))
+                if topic_row and topic_row.get("skim_skill_md"):
+                    try:
+                        await _synthesize_paper(paper_id, topic_row)
+                    except Exception as _exc:
+                        _log.warning("auto-skim failed for paper=%d topic=%d: %s", paper_id, tid, _exc)
 
     if request.headers.get("HX-Request"):
         resp = HTMLResponse("")
@@ -493,6 +573,7 @@ def _paper_detail_context(request: Request, paper: dict, paper_id: int, active_t
     linked_topic_ids = {t["id"] for t in topics}
     topic_has_skill = bool(active_topic and active_topic.get("skim_skill_md"))
     topic_note = active_skim.get("human_note") if active_skim else None
+    skim_labels = parse_skim_labels(active_topic) if active_topic else {}
 
     return {
         "request": request,
@@ -509,6 +590,8 @@ def _paper_detail_context(request: Request, paper: dict, paper_id: int, active_t
         "topic_has_skill": topic_has_skill,
         "all_topics": all_topics,
         "linked_topic_ids": linked_topic_ids,
+        "is_book": paper.get("content_type") == "book",
+        "skim_labels": skim_labels,
     }
 
 
@@ -626,7 +709,7 @@ async def get_structural_skim_tab(request: Request, paper_id: int, topic_id: int
     """Return the structural skim partial for a given (paper, topic) — used by tab switching."""
     import hashlib
     skim = _get_topic_paper_note(topic_id, paper_id)
-    topic = row_to_dict(fetch_one("SELECT id, name, skim_skill_md FROM topics WHERE id = ?", (topic_id,)))
+    topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
     skill_md = (topic.get("skim_skill_md") or "") if topic else ""
     skill_hash = hashlib.sha256(skill_md.encode()).hexdigest()
     topic_name = (topic.get("name") or "") if topic else ""
@@ -634,7 +717,8 @@ async def get_structural_skim_tab(request: Request, paper_id: int, topic_id: int
         "papers/partials/structural_skim.html",
         {"request": request, "skim": skim, "topic_id": topic_id, "paper_id": paper_id,
          "current_skill_hash": skill_hash, "topic_has_skill": bool(skill_md),
-         "topic_name": topic_name, "skim_skill_md": skill_md},
+         "topic_name": topic_name, "skim_skill_md": skill_md,
+         "skim_labels": parse_skim_labels(topic) if topic else {}},
     )
 
 
@@ -669,6 +753,7 @@ async def generate_structural_skim(request: Request, paper_id: int, topic_id: in
         "request": request, "topic_id": topic_id, "paper_id": paper_id,
         "current_skill_hash": skill_hash, "topic_has_skill": topic_has_skill,
         "topic_name": topic_name, "skim_skill_md": skill_md,
+        "skim_labels": parse_skim_labels(topic),
     }
 
     synthesis_error = await _synthesize_paper(paper_id, topic)
@@ -713,6 +798,7 @@ async def generate_structural_skim_v2(request: Request, paper_id: int, topic_id:
         "request": request, "topic_id": topic_id, "paper_id": paper_id,
         "current_skill_hash": skill_hash, "topic_has_skill": bool(skill_md),
         "topic_name": topic.get("name") or "", "skim_skill_md": skill_md,
+        "skim_labels": parse_skim_labels(topic),
     }
 
     synthesis_error = await _synthesize_paper(paper_id, topic)
@@ -1118,6 +1204,7 @@ async def update_paper_info(
     url: str = Form(""),
     abstract: str = Form(""),
     pdf_local_path: str = Form(""),
+    onenote_url: str = Form(""),
 ):
     paper = _get_paper(paper_id)
     if not paper:
@@ -1134,7 +1221,7 @@ async def update_paper_info(
     execute(
         """UPDATE papers
            SET title=?, authors=?, published_venue=?, published_date=?, url=?, abstract=?,
-               pdf_local_path=?
+               pdf_local_path=?, onenote_url=?
            WHERE id=?""",
         (
             title,
@@ -1144,6 +1231,7 @@ async def update_paper_info(
             url.strip(),
             abstract.strip(),
             new_pdf_path,
+            onenote_url.strip() or None,
             paper_id,
         ),
     )

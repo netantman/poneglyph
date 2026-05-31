@@ -21,7 +21,11 @@
         {% if paper.unprocessed %}
         <span title="Unprocessed" style="color: #f59e0b; font-size: 0.75rem; margin-left: 0.3rem;">○</span>
         {% endif %}
-        {% if paper.content_type == 'article' %}
+        {% if paper.content_type == 'book' %}
+        <span title="Ebook / reference book" style="font-size:0.68rem; padding:0.05rem 0.35rem;
+              border-radius:1rem; background:rgba(234,179,8,0.15); color:#a16207;
+              vertical-align:middle; margin-left:0.3rem;">book</span>
+        {% elif paper.content_type == 'article' %}
         <span title="Blog / newsletter article" style="font-size:0.68rem; padding:0.05rem 0.35rem;
               border-radius:1rem; background:rgba(139,92,246,0.15); color:#7c3aed;
               vertical-align:middle; margin-left:0.3rem;">article</span>

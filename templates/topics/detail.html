@@ -117,11 +117,11 @@
         {% if topic.problem_statements %}
         <article>
             <header><strong>Problem Statements</strong></header>
-            <ul>
+            <div style="font-size:0.9rem; line-height:1.7;">
                 {% for ps in topic.problem_statements %}
-                    <li>{{ ps }}</li>
+                <p style="margin:0 0 0.5rem;">{{ ps }}</p>
                 {% endfor %}
-            </ul>
+            </div>
         </article>
         {% endif %}
 
@@ -148,7 +148,7 @@
                        style="margin: 0; padding: 0.3rem 0.7rem; font-size: 0.85rem;"
                        hx-get="/papers/upload?topic_id={{ topic.id }}" hx-target="#upload-form-area" hx-swap="innerHTML"
                        hx-indicator="#paper-add-ind">
-                        + Add Paper <span id="paper-add-ind" class="htmx-indicator"><span class="spinner"></span></span>
+                        + Add Literature <span id="paper-add-ind" class="htmx-indicator"><span class="spinner"></span></span>
                     </a>
                 </div>
             </header>

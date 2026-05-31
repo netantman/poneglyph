@@ -42,37 +42,38 @@
 
 {% if has_skim %}
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem 1.5rem; font-size:0.9rem;">
+    {% set L = skim_labels if skim_labels else {} %}
     {% if skim.main_claim %}
     <div style="grid-column:1/-1;">
-        <strong>Main Claim</strong>
+        <strong>{{ L.get('main_claim', 'Main Claim') }}</strong>
         <p style="margin:0.2rem 0 0.5rem;">{{ skim.main_claim }}</p>
     </div>
     {% endif %}
 
     {% if skim.strategy_type %}
     <div>
-        <strong>Strategy Type</strong>
+        <strong>{{ L.get('strategy_type', 'Strategy Type') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.strategy_type }}</p>
     </div>
     {% endif %}
 
     {% if skim.headline_statistic %}
     <div>
-        <strong>Headline Statistic</strong>
+        <strong>{{ L.get('headline_statistic', 'Headline Statistic') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.headline_statistic }}</p>
     </div>
     {% endif %}
 
     {% if skim.signal_mechanism %}
     <div>
-        <strong>Signal Mechanism</strong>
+        <strong>{{ L.get('signal_mechanism', 'Mechanism / Approach') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.signal_mechanism }}</p>
     </div>
     {% endif %}
 
     {% if skim.data_source or skim.data_details %}
     <div>
-        <strong>Data</strong>
+        <strong>{{ L.get('data', 'Data') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">
             {{ skim.data_source }}{% if skim.data_source and skim.data_details %} — {% endif %}{{ skim.data_details }}
         </p>
@@ -81,35 +82,35 @@
 
     {% if skim.sample %}
     <div>
-        <strong>Sample</strong>
+        <strong>{{ L.get('sample', 'Sample') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.sample }}</p>
     </div>
     {% endif %}
 
     {% if skim.universe %}
     <div>
-        <strong>Universe</strong>
+        <strong>{{ L.get('universe', 'Universe') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.universe }}</p>
     </div>
     {% endif %}
 
     {% if skim.portfolio_construction %}
     <div style="grid-column:1/-1;">
-        <strong>Portfolio Construction</strong>
+        <strong>{{ L.get('portfolio_construction', 'Portfolio Construction') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.portfolio_construction }}</p>
     </div>
     {% endif %}
 
     {% if skim.key_metrics %}
     <div style="grid-column:1/-1;">
-        <strong>Key Metrics</strong>
+        <strong>{{ L.get('key_metrics', 'Key Metrics') }}</strong>
         <p style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">{{ skim.key_metrics }}</p>
     </div>
     {% endif %}
 
     {% if skim.key_tables and skim.key_tables != [] %}
     <div style="grid-column:1/-1;">
-        <strong>Key Tables</strong>
+        <strong>{{ L.get('key_tables', 'Key Tables') }}</strong>
         <ul style="margin:0.2rem 0 0.5rem; color:var(--pico-muted-color);">
             {% for t in skim.key_tables %}
             <li>{{ t }}</li>

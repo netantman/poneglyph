@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Bump this whenever a destructive migration is added. _migrate() compares against
 # PRAGMA user_version and only runs newer steps, so we don't re-execute migrations
 # on every boot.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 7
 
 _SCHEMA_SQL = """
 -- Topics: user-defined research areas with keywords, steering, and LLM skill prompts
@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS topics (
     is_active       INTEGER NOT NULL DEFAULT 1,
     skim_skill_md   TEXT,                                -- Haiku structural skim prompt (Markdown)
     deep_synthesis_skill_md TEXT,                        -- Sonnet/Opus deep synthesis prompt (Markdown)
+    skim_field_labels TEXT,                              -- JSON dict of display-label overrides for skim fields
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS papers (
     url             TEXT NOT NULL DEFAULT '',
     pdf_url         TEXT NOT NULL DEFAULT '',
     pdf_local_path  TEXT,
+    onenote_url     TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(source, source_id)
 );
@@ -651,6 +653,18 @@ def _migrate(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_paper_qa_history_paper_topic
                 ON paper_qa_history (paper_id, topic_id)
         """)
+
+    # ── Schema version 6: onenote_url on papers ──────────────────────────────
+    if current < 6:
+        p_cols_v6 = {row[1] for row in conn.execute("PRAGMA table_info(papers)").fetchall()}
+        if "onenote_url" not in p_cols_v6:
+            conn.execute("ALTER TABLE papers ADD COLUMN onenote_url TEXT")
+
+    # ── Schema version 7: skim_field_labels on topics ────────────────────────
+    if current < 7:
+        t_cols_v7 = {row[1] for row in conn.execute("PRAGMA table_info(topics)").fetchall()}
+        if "skim_field_labels" not in t_cols_v7:
+            conn.execute("ALTER TABLE topics ADD COLUMN skim_field_labels TEXT")
 
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()

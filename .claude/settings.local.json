@@ -169,7 +169,16 @@
       "Bash(cd /d \"C:\\\\Users\\\\zhong\\\\source\\\\repos\\\\poneglyph\")",
       "Bash(conda run *)",
       "PowerShell(cd \"C:\\\\Users\\\\zhong\\\\source\\\\repos\\\\poneglyph\"; & \"$env:USERPROFILE\\\\miniconda3\\\\Scripts\\\\conda.exe\" run -n poneglyph python -c \"from poneglyph.db import init_db; from poneglyph.routes.papers import router; from poneglyph.services.llm_qa_paper import answer_paper_question; from poneglyph.services.pdf_manager import extract_pdf_text_with_pages; print\\('imports OK'\\)\" 2>&1)",
-      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\anaconda3\\\\Scripts\\\\conda.exe\", \"$env:USERPROFILE\\\\AppData\\\\Local\\\\miniconda3\\\\Scripts\\\\conda.exe\", \"C:\\\\ProgramData\\\\miniconda3\\\\Scripts\\\\conda.exe\", \"C:\\\\ProgramData\\\\anaconda3\\\\Scripts\\\\conda.exe\" -ErrorAction SilentlyContinue | Select-Object -First 1 FullName)"
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\anaconda3\\\\Scripts\\\\conda.exe\", \"$env:USERPROFILE\\\\AppData\\\\Local\\\\miniconda3\\\\Scripts\\\\conda.exe\", \"C:\\\\ProgramData\\\\miniconda3\\\\Scripts\\\\conda.exe\", \"C:\\\\ProgramData\\\\anaconda3\\\\Scripts\\\\conda.exe\" -ErrorAction SilentlyContinue | Select-Object -First 1 FullName)",
+      "Bash(python -c \"from poneglyph.services.pdf_manager import get_ebook_library_dir, save_ebook_pdf; print\\('pdf_manager OK'\\)\")",
+      "Bash(python -c \"from poneglyph.routes.papers import router; print\\('routes OK'\\)\")",
+      "Bash(.venv\\\\Scripts\\\\python.exe -c \"from poneglyph.services.pdf_manager import get_ebook_library_dir, save_ebook_pdf; print\\('pdf_manager OK'\\)\")",
+      "Bash(.venv\\\\Scripts\\\\python.exe -c \"from poneglyph.routes.papers import router; print\\('routes OK'\\)\")",
+      "Read(//mnt/c/Users/zhong/source/repos/**)",
+      "Bash(.venv/Scripts/python.exe -c \"from poneglyph.services.pdf_manager import get_ebook_library_dir, save_ebook_pdf; print\\('pdf_manager OK'\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from poneglyph.routes.papers import router; print\\('routes OK'\\)\")",
+      "PowerShell(Get-Command py -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command python3 -ErrorAction SilentlyContinue)"
     ]
   }
 }

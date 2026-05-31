@@ -1,0 +1,16 @@
+{% set is_skim = skill_name == "skim" %}
+{% set skill_value = topic.skim_skill_md if is_skim else topic.deep_synthesis_skill_md %}
+{% set skill_label = "Skim Skill" if is_skim else "Deep Synthesis Skill" %}
+{% set skill_hint = "(Haiku)" if is_skim else "(Sonnet / Opus)" %}
+
+<div class="modal-inner" style="min-width:min(860px,90vw);">
+    <div class="modal-header">
+        <h4>{{ skill_label }} — {{ topic.name }} <small style="color:var(--pico-muted-color); font-weight:400;">{{ skill_hint }}</small></h4>
+        <button class="modal-close" onclick="closeModal()" type="button" aria-label="Close">✕</button>
+    </div>
+    {% if skill_value %}
+    <div class="skill-md" data-md="{{ skill_value | e }}"></div>
+    {% else %}
+    <p style="color:var(--pico-muted-color); font-size:0.9rem;">No skill set.</p>
+    {% endif %}
+</div>

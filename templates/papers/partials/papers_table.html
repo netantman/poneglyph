@@ -23,7 +23,18 @@
                 <span title="Unprocessed" style="color: #f59e0b; font-size: 0.85rem;">○</span>
                 {% endif %}
             </td>
-            <td><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></td>
+            <td>
+                <a href="/papers/{{ paper.id }}">{{ paper.title }}</a>
+                {% if paper.content_type == 'book' %}
+                <span title="Ebook / reference book" style="font-size:0.68rem; padding:0.05rem 0.35rem;
+                      border-radius:1rem; background:rgba(234,179,8,0.15); color:#a16207;
+                      vertical-align:middle; margin-left:0.3rem;">book</span>
+                {% elif paper.content_type == 'article' %}
+                <span title="Blog / newsletter article" style="font-size:0.68rem; padding:0.05rem 0.35rem;
+                      border-radius:1rem; background:rgba(139,92,246,0.15); color:#7c3aed;
+                      vertical-align:middle; margin-left:0.3rem;">article</span>
+                {% endif %}
+            </td>
             <td style="white-space: nowrap; color: var(--pico-muted-color);">{{ paper.authors | author_cite(paper.published_date) }}</td>
         </tr>
         {% endfor %}

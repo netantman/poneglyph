@@ -1,0 +1,11 @@
+<div class="modal-inner">
+    <div class="modal-header">
+        <h4>Problem Statements — {{ topic.name }}</h4>
+        <button class="modal-close" onclick="closeModal()" type="button" aria-label="Close">✕</button>
+    </div>
+    <div style="font-size:0.9rem; line-height:1.7;">
+        {% for ps in topic.problem_statements %}
+        <p style="margin:0 0 0.5rem;">{{ ps }}</p>
+        {% endfor %}
+    </div>
+</div>

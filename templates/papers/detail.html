@@ -5,16 +5,16 @@
 {% block content %}
 <nav aria-label="breadcrumb">
     <ul>
-        <li><a href="/papers">Papers</a></li>
+        <li><a href="/papers">Literature</a></li>
         <li>{{ paper.title[:60] }}{% if paper.title|length > 60 %}...{% endif %}</li>
     </ul>
 </nav>
 
 {% include "papers/partials/topic_tabs.html" %}
 
-<!-- Paper Info -->
+<!-- Paper / Book Info -->
 <article>
-    <header><strong>Paper Info</strong></header>
+    <header><strong>{% if is_book %}Book Info{% else %}Paper Info{% endif %}</strong></header>
     <div id="paper-info-section">
         {% with editing=False %}
             {% include "papers/partials/paper_info.html" %}
@@ -24,16 +24,17 @@
 
 <hr style="margin: 1.5rem 0;">
 
+{% if not is_book %}
 <!-- Structural Skim -->
 <article>
     <header><strong>Structural Skim</strong></header>
-
 
     <div id="skim-tab-panel">
         {% with skim=active_skim, topic_id=active_topic_id, paper_id=paper.id,
                 current_skill_hash=skim_skill_hash, topic_has_skill=topic_has_skill,
                 topic_name=(active_topic.name if active_topic else ''),
-                skim_skill_md=(active_topic.skim_skill_md if active_topic else '') %}
+                skim_skill_md=(active_topic.skim_skill_md if active_topic else ''),
+                skim_labels=skim_labels %}
             {% include "papers/partials/structural_skim.html" %}
         {% endwith %}
     </div>
@@ -49,7 +50,6 @@
             Requires a local PDF — Sonnet reads the full paper text.
         </small>
     </header>
-
 
     <div id="deep-tab-panel">
         {% with ds=active_skim, topic_id=active_topic_id, paper_id=paper.id,
@@ -75,6 +75,7 @@
 
 <hr style="margin: 1.5rem 0;">
 {% endif %}
+{% endif %}{# end not is_book #}
 
 <!-- Human Note -->
 <article>
@@ -135,7 +136,7 @@
 
 <div id="pdf-manage-area"></div>
 <div class="actions" style="margin-top: 1rem;">
-    <a href="/papers" role="button" class="outline secondary">Back to Papers</a>
+    <a href="/papers" role="button" class="outline secondary">Back to Literature</a>
     <button class="outline" title="Copy HTML link to this paper — paste into any Human Note"
             data-paper-id="{{ paper.id }}" data-paper-title="{{ paper.title }}"
             onclick="copyPaperLink(this)">
@@ -153,8 +154,8 @@
             title="Mark as unprocessed">&#10003; Processed</button>
     {% endif %}
 
-    <!-- Discover Citations -->
-    {% if topics %}
+    <!-- Discover Citations (papers only — books not in Semantic Scholar graph) -->
+    {% if not is_book and topics %}
         {% if topics|length == 1 %}
         <button class="outline"
                 hx-post="/scout/paper/{{ paper.id }}"

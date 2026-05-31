@@ -27,6 +27,32 @@ router = APIRouter(prefix="/topics", tags=["topics"])
 
 # ---------- helpers ----------
 
+SKIM_LABEL_DEFAULTS: dict[str, str] = {
+    "main_claim": "Main Claim",
+    "strategy_type": "Strategy Type",
+    "headline_statistic": "Headline Statistic",
+    "signal_mechanism": "Mechanism / Approach",
+    "data": "Data",
+    "sample": "Sample",
+    "universe": "Universe",
+    "portfolio_construction": "Portfolio Construction",
+    "key_metrics": "Key Metrics",
+    "key_tables": "Key Tables",
+}
+
+
+def parse_skim_labels(topic: dict) -> dict[str, str]:
+    """Return merged label dict: defaults overridden by any stored per-topic values."""
+    raw = (topic or {}).get("skim_field_labels") or "{}"
+    try:
+        overrides = json.loads(raw)
+        if not isinstance(overrides, dict):
+            overrides = {}
+    except Exception:
+        overrides = {}
+    return {**SKIM_LABEL_DEFAULTS, **{k: v for k, v in overrides.items() if isinstance(v, str) and v.strip()}}
+
+
 def _topic_row(topic_id: int) -> dict | None:
     return row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id,)))
 
@@ -230,6 +256,17 @@ def _skill_col(skill_name: str) -> str:
     return "skim_skill_md" if skill_name == "skim" else "deep_synthesis_skill_md"
 
 
+@router.get("/{topic_id}/problem-statements", response_class=HTMLResponse)
+async def problem_statements_modal(request: Request, topic_id: int):
+    topic = _topic_row(topic_id)
+    if not topic:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "topics/partials/ps_modal.html",
+        {"request": request, "topic": topic},
+    )
+
+
 @router.get("/{topic_id}/skills/{skill_name}/edit", response_class=HTMLResponse)
 async def edit_skill_form(request: Request, topic_id: int, skill_name: str):
     if skill_name not in _VALID_SKILLS:
@@ -239,7 +276,8 @@ async def edit_skill_form(request: Request, topic_id: int, skill_name: str):
         return HTMLResponse("", status_code=404)
     return templates.TemplateResponse(
         "topics/partials/skill_editor.html",
-        {"request": request, "topic": topic, "skill_name": skill_name, "editing": True},
+        {"request": request, "topic": topic, "skill_name": skill_name,
+         "skim_label_defaults": SKIM_LABEL_DEFAULTS, "skim_labels": parse_skim_labels(topic)},
     )
 
 
@@ -251,8 +289,8 @@ async def view_skill(request: Request, topic_id: int, skill_name: str):
     if not topic:
         return HTMLResponse("", status_code=404)
     return templates.TemplateResponse(
-        "topics/partials/skill_editor.html",
-        {"request": request, "topic": topic, "skill_name": skill_name, "editing": False},
+        "topics/partials/skill_view_modal.html",
+        {"request": request, "topic": topic, "skill_name": skill_name},
     )
 
 
@@ -269,17 +307,35 @@ async def update_skill(
     if not topic:
         return HTMLResponse("", status_code=404)
     col = _skill_col(skill_name)
-    execute(
-        f"UPDATE topics SET {col} = ?, updated_at = datetime('now') WHERE id = ?",
-        (skill_md.strip() or None, topic_id),
-    )
+
+    if skill_name == "skim":
+        form = await request.form()
+        labels: dict[str, str] = {}
+        for key, default in SKIM_LABEL_DEFAULTS.items():
+            val = str(form.get(f"label__{key}") or "").strip()
+            if val and val != default:
+                labels[key] = val
+        labels_json = json.dumps(labels) if labels else None
+        execute(
+            f"UPDATE topics SET {col} = ?, skim_field_labels = ?, updated_at = datetime('now') WHERE id = ?",
+            (skill_md.strip() or None, labels_json, topic_id),
+        )
+    else:
+        execute(
+            f"UPDATE topics SET {col} = ?, updated_at = datetime('now') WHERE id = ?",
+            (skill_md.strip() or None, topic_id),
+        )
+
     topic = _topic_row(topic_id)
     label = "Skim" if skill_name == "skim" else "Deep"
     resp = templates.TemplateResponse(
-        "topics/partials/skill_editor.html",
-        {"request": request, "topic": topic, "skill_name": skill_name, "editing": False},
+        "topics/partials/skill_cell.html",
+        {"request": request, "topic": topic, "skill_name": skill_name},
     )
-    resp.headers.update(_toast_headers(f"{label} skill updated"))
+    resp.headers.update({"HX-Trigger": json.dumps({
+        "showToast": {"message": f"{label} skill updated", "type": "success"},
+        "closeModal": True,
+    })})
     return resp
 
 

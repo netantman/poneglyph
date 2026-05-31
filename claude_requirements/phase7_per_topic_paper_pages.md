@@ -224,6 +224,51 @@ exist. All callers pass through this helper — no duplication across scout path
 - Plays cleanly alongside **Phase 6** (article ingest paths share the same add-to-topic
   helper that gets the auto-skim trigger)
 
+## Per-topic skim field label overrides
+
+The structural skim UI displays fixed section headings (Main Claim, Strategy Type, etc.) derived
+from the DB column names. These defaults are appropriate for factor/strategy papers but misleading
+for other domains — e.g. "Mechanism / Approach" is more accurate than "Signal Mechanism" for
+portfolio construction topics, and a macro topic might prefer "Policy Channel" over "Signal Mechanism".
+
+**Implementation:**
+
+- New column `topics.skim_field_labels TEXT` (JSON dict, NULL = all defaults). Migration v8.
+- `SKIM_LABEL_DEFAULTS` dict and `parse_skim_labels(topic) -> dict` helper in `routes/topics.py`.
+  The helper merges stored overrides on top of defaults; non-overridden fields use the default label.
+- `update_skill` route (PUT `/topics/{id}/skills/skim`) reads `label__{field_key}` form params,
+  stores only non-default values in `skim_field_labels`. Deep skill saves are unchanged.
+- All skim-rendering routes in `routes/papers.py` pass `skim_labels` dict to the template context.
+- `structural_skim.html` reads labels via `L.get('field_key', 'Default Label')` — no hardcoded strings.
+- `skill_editor.html` shows a collapsible "Customize field labels" section (skim skill only) with
+  one text input per field, pre-filled from the stored overrides.
+
+**Fields with configurable labels (10 total):**
+`main_claim`, `strategy_type`, `headline_statistic`, `signal_mechanism`, `data`,
+`sample`, `universe`, `portfolio_construction`, `key_metrics`, `key_tables`
+
+**Status:** ✅ Done (schema v7)
+
+## LaTeX rendering in skim / deep synthesis
+
+Structural skim fields and deep synthesis output are rendered via `marked.js` into `.skill-md`
+divs. LLM output for quantitative topics (portfolio optimization, factor models, etc.) frequently
+contains LaTeX math notation — inline (`$...$`) and display (`$$...$$`) — which must be rendered
+as proper typeset math rather than raw source.
+
+**Implementation:** KaTeX via CDN, triggered after each `marked.parse()` call.
+
+- Load `katex.min.css` and `katex.min.js` + `contrib/auto-render.min.js` from jsDelivr in
+  `<head>` of `base.html`.
+- In `renderMdElements()`, after setting `el.innerHTML`, call
+  `renderMathInElement(el, { delimiters: [...], throwOnError: false })`.
+- Delimiters: `$$...$$` (display), `$...$` (inline), `\[...\]` (display), `\(...\)` (inline).
+- `throwOnError: false` — bad LaTeX falls back to raw source rather than crashing.
+- Applied to all `.skill-md` elements (skim fields, deep synthesis modal, skill viewer modal)
+  since those are the only consumers of `data-md` rendering.
+
+**Status:** ✅ Done
+
 ## Out of scope
 
 - **Per-topic abstract or paper_info** — paper-level metadata stays shared.

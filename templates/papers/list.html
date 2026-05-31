@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Papers - Poneglyph{% endblock %}
+{% block title %}Literature - Poneglyph{% endblock %}
 
 {% block content %}
 <hgroup>
-    <h2>Papers{% if topic %} — {{ topic.name }}{% endif %}</h2>
-    <p>{% if topic %}Papers linked to this topic.{% else %}All discovered and uploaded papers.{% endif %}</p>
+    <h2>Literature{% if topic %} — {{ topic.name }}{% endif %}</h2>
+    <p>{% if topic %}Literature linked to this topic.{% else %}All discovered and uploaded papers and books.{% endif %}</p>
 </hgroup>
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -24,12 +24,19 @@
                    style="margin: 0;">
             Read Next only
         </label>
+        <label style="display: flex; align-items: center; gap: 0.3rem; margin: 0; white-space: nowrap; cursor: pointer;">
+            <input type="checkbox" name="books_only" value="1"
+                   {% if books_only_filter %}checked{% endif %}
+                   onchange="this.form.submit()"
+                   style="margin: 0;">
+            Books only
+        </label>
     </form>
 
     <a href="/papers/upload{% if topic %}?topic_id={{ topic.id }}{% endif %}" role="button"
        hx-get="/papers/upload{% if topic %}?topic_id={{ topic.id }}{% endif %}" hx-target="#upload-form-area" hx-swap="innerHTML"
        hx-indicator="#upload-ind">
-        + Add Paper <span id="upload-ind" class="htmx-indicator"><span class="spinner"></span></span>
+        + Add Literature <span id="upload-ind" class="htmx-indicator"><span class="spinner"></span></span>
     </a>
 </div>
 
@@ -42,7 +49,7 @@
        hx-trigger="input changed delay:300ms"
        hx-target="#papers-table-wrapper"
        hx-swap="innerHTML"
-       hx-include="[name='topic_id'],[name='read_next']">
+       hx-include="[name='topic_id'],[name='read_next'],[name='books_only']">
 
 <div id="papers-table-wrapper">
 {% include "papers/partials/papers_table.html" %}

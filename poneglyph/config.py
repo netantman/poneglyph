@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     pdf_base_dir: str = r"C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides"
     pdf_scouting_subfolder: str = "poneglygh_processing"
 
+    # Ebook library — flat folder where book PDFs are saved
+    ebook_library_dir: str = r"C:\Users\zhong\OneDrive\Ebook Library\References"
+
     # Legacy (kept for backward compat)
     pdf_dir: str = str(ROOT_DIR / "data" / "pdfs")
 
