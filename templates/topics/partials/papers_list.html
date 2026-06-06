@@ -17,7 +17,7 @@
         {{ "%.2f"|format(paper.relevance_score) if paper.relevance_score is not none else "—" }}
     </span>
     <div style="flex:1; min-width:0;">
-        <a href="/papers/{{ paper.id }}"><strong>{{ paper.title }}</strong></a>
+        <a href="/papers/{{ paper.id }}/topics/{{ topic.id }}"><strong>{{ paper.title }}</strong></a>
         {% if paper.unprocessed %}
         <span title="Unprocessed" style="color: #f59e0b; font-size: 0.75rem; margin-left: 0.3rem;">○</span>
         {% endif %}

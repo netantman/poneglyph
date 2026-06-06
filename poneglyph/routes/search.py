@@ -63,17 +63,23 @@ async def search_page(request: Request, q: str = "", mode: str = "keyword"):
 
 
 @router.post("/ask", response_class=HTMLResponse)
-async def ask_question(request: Request, question: str = Form("")):
-    """Answer a question about the paper collection using vector + FTS5 + Sonnet."""
+async def ask_question(
+    request: Request,
+    question: str = Form(""),
+    topic_id: str = Form(""),
+):
+    """Answer a question about the paper collection using intent-routed retrieval + Sonnet."""
     question = question.strip()
     if not question:
         return HTMLResponse(
             '<p style="color:var(--pico-muted-color);">Please enter a question.</p>'
         )
 
+    topic_id_int = int(topic_id) if topic_id.strip().isdigit() else None
+
     try:
         from poneglyph.services.llm_qa import answer_question
-        answer_md = await answer_question(question)
+        answer_md = await answer_question(question, topic_id=topic_id_int)
     except Exception as exc:
         return HTMLResponse(
             f'<p style="color:var(--pico-del-color);">Error: {exc}</p>'

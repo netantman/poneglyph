@@ -24,7 +24,7 @@
                 {% endif %}
             </td>
             <td>
-                <a href="/papers/{{ paper.id }}">{{ paper.title }}</a>
+                <a href="/papers/{{ paper.id }}{% if topic_id %}?topic={{ topic_id }}{% endif %}">{{ paper.title }}</a>
                 {% if paper.content_type == 'book' %}
                 <span title="Ebook / reference book" style="font-size:0.68rem; padding:0.05rem 0.35rem;
                       border-radius:1rem; background:rgba(234,179,8,0.15); color:#a16207;

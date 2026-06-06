@@ -486,3 +486,68 @@
 2026-05-31 10:56:11,210 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
 2026-05-31 10:56:11,211 [INFO] validate_db: all checks passed
 2026-05-31 10:56:11,784 [INFO] Recent backup exists — skipping (--skip-if-recent)
+ 
+=== Mon 06/01/2026  3:00:01.44 === 
+2026-06-01 03:00:02,795 [INFO] integrity_check: ok
+2026-06-01 03:00:02,799 [INFO] foreign_key_check: ok
+2026-06-01 03:00:02,858 [WARNING] Missing PDF files: 1
+2026-06-01 03:00:02,858 [WARNING]   paper=585  MAC3 GRM USD Credit Risk Models: Empirical Notes  ->  C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\BBG\White Papers\PORT and Risk Models\MAC3 GRM USD Credit Risk Models  - Empirical Notes.pdf
+2026-06-01 03:00:02,870 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-06-01 03:00:02,870 [INFO] validate_db: all checks passed
+2026-06-01 03:00:05,422 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260601-0300.db.gz (13681.6 KB)
+2026-06-01 03:00:15,274 [INFO] GitHub push ok: poneglyph-20260601-0300.db.gz
+ 
+=== Tue 06/02/2026  3:00:01.46 === 
+2026-06-02 03:00:02,948 [INFO] integrity_check: ok
+2026-06-02 03:00:02,951 [INFO] foreign_key_check: ok
+2026-06-02 03:00:03,041 [WARNING] Missing PDF files: 1
+2026-06-02 03:00:03,041 [WARNING]   paper=585  MAC3 GRM USD Credit Risk Models: Empirical Notes  ->  C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\BBG\White Papers\PORT and Risk Models\MAC3 GRM USD Credit Risk Models  - Empirical Notes.pdf
+2026-06-02 03:00:03,053 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-06-02 03:00:03,054 [INFO] validate_db: all checks passed
+2026-06-02 03:00:05,660 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260602-0300.db.gz (13635.7 KB)
+2026-06-02 03:00:05,737 [INFO] Pruned old backup: poneglyph-20260520-2212.db.gz
+2026-06-02 03:00:17,269 [INFO] GitHub push ok: poneglyph-20260602-0300.db.gz
+ 
+=== Wed 06/03/2026  3:00:01.42 === 
+2026-06-03 03:00:02,830 [INFO] integrity_check: ok
+2026-06-03 03:00:02,834 [INFO] foreign_key_check: ok
+2026-06-03 03:00:02,895 [WARNING] Missing PDF files: 1
+2026-06-03 03:00:02,895 [WARNING]   paper=585  MAC3 GRM USD Credit Risk Models: Empirical Notes  ->  C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\BBG\White Papers\PORT and Risk Models\MAC3 GRM USD Credit Risk Models  - Empirical Notes.pdf
+2026-06-03 03:00:02,898 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-06-03 03:00:02,899 [INFO] validate_db: all checks passed
+2026-06-03 03:00:05,218 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260603-0300.db.gz (13593.5 KB)
+2026-06-03 03:00:05,461 [INFO] Pruned old backup: poneglyph-20260521-0300.db.gz
+2026-06-03 03:00:21,382 [INFO] GitHub push ok: poneglyph-20260603-0300.db.gz
+ 
+=== Thu 06/04/2026  3:00:01.45 === 
+2026-06-04 03:00:02,841 [INFO] integrity_check: ok
+2026-06-04 03:00:02,845 [INFO] foreign_key_check: ok
+2026-06-04 03:00:02,906 [WARNING] Missing PDF files: 1
+2026-06-04 03:00:02,906 [WARNING]   paper=585  MAC3 GRM USD Credit Risk Models: Empirical Notes  ->  C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\BBG\White Papers\PORT and Risk Models\MAC3 GRM USD Credit Risk Models  - Empirical Notes.pdf
+2026-06-04 03:00:02,909 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-06-04 03:00:02,909 [INFO] validate_db: all checks passed
+2026-06-04 03:00:03,925 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260604-0300.db.gz (13590.7 KB)
+2026-06-04 03:00:04,015 [INFO] Pruned old backup: poneglyph-20260522-0300.db.gz
+2026-06-04 03:00:21,451 [INFO] GitHub push ok: poneglyph-20260604-0300.db.gz
+ 
+=== Thu 06/04/2026 20:02:19.92 === 
+2026-06-04 20:02:28,131 [INFO] integrity_check: ok
+2026-06-04 20:02:28,139 [INFO] foreign_key_check: ok
+2026-06-04 20:02:28,333 [WARNING] Missing PDF files: 1
+2026-06-04 20:02:28,333 [WARNING]   paper=585  MAC3 GRM USD Credit Risk Models: Empirical Notes  ->  C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\BBG\White Papers\PORT and Risk Models\MAC3 GRM USD Credit Risk Models  - Empirical Notes.pdf
+2026-06-04 20:02:28,337 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-06-04 20:02:28,337 [INFO] validate_db: all checks passed
+2026-06-04 20:02:30,419 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260604-2002.db.gz (13590.7 KB)
+2026-06-04 20:02:30,437 [INFO] Pruned old backup: poneglyph-20260522-1857.db.gz
+2026-06-04 20:02:45,799 [INFO] GitHub push ok: poneglyph-20260604-2002.db.gz
+ 
+=== Fri 06/05/2026  3:00:01.71 === 
+2026-06-05 03:00:02,955 [INFO] integrity_check: ok
+2026-06-05 03:00:02,959 [INFO] foreign_key_check: ok
+2026-06-05 03:00:03,028 [WARNING] Missing PDF files: 1
+2026-06-05 03:00:03,028 [WARNING]   paper=585  MAC3 GRM USD Credit Risk Models: Empirical Notes  ->  C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\BBG\White Papers\PORT and Risk Models\MAC3 GRM USD Credit Risk Models  - Empirical Notes.pdf
+2026-06-05 03:00:03,032 [INFO] deep_synthesis \u2194 topic_papers consistency: ok
+2026-06-05 03:00:03,032 [INFO] validate_db: all checks passed
+2026-06-05 03:00:05,412 [INFO] Backup written: C:\Users\zhong\OneDrive\Papers, Presentation, Reports and Slides\poneglyph_backups\poneglyph-20260605-0300.db.gz (13562.8 KB)
+2026-06-05 03:00:05,421 [INFO] Pruned old backup: poneglyph-20260523-0300.db.gz
+2026-06-05 03:00:22,984 [INFO] GitHub push ok: poneglyph-20260605-0300.db.gz

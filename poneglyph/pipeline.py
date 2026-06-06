@@ -13,7 +13,7 @@ from poneglyph.services.citation_scout import (
     extract_note_directives, search_from_directives,
 )
 from poneglyph.services.llm_bulk import synthesize_paper
-from poneglyph.services.semantic_scholar import get_paper as s2_get_paper
+from poneglyph.services.semantic_scholar import S2RateLimitError, get_paper as s2_get_paper
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,12 @@ async def run_paper_enrichment(paper_id: int, topic_id: int, run_id: int) -> Non
             "run_paper_enrichment done: paper=%d topic=%d found=%d synth=%d",
             paper_id, topic_id, len(new_ids), synth_count,
         )
+    except S2RateLimitError:
+        logger.warning("run_paper_enrichment paper=%d: S2 rate limited", paper_id)
+        _finish_run(
+            run_id, found=0, new=0, status="error",
+            error="Semantic Scholar rate limited — wait a minute and try again.",
+        )
     except Exception as exc:
         logger.exception("run_paper_enrichment failed: %s", exc)
         _finish_run(run_id, found=0, new=0, status="error", error=str(exc))
@@ -292,8 +298,14 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
             return
 
         all_new: set[int] = set()
+        rate_limited = False
         for pid in paper_ids:
-            new = await discover_from_paper(pid, topic_id)
+            try:
+                new = await discover_from_paper(pid, topic_id)
+            except S2RateLimitError:
+                logger.warning("run_topic_scout: topic=%d rate limited mid-traversal", topic_id)
+                rate_limited = True
+                break
             all_new.update(new)
             # Update running count
             execute(
@@ -302,7 +314,7 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
             )
 
         # Note-driven directives: scan human notes for explicit scouting instructions
-        directives = extract_note_directives(topic_id)
+        directives = [] if rate_limited else extract_note_directives(topic_id)
         if directives:
             logger.info(
                 "run_topic_scout: topic=%d found %d scouting directive(s) in notes",
@@ -326,10 +338,23 @@ async def run_topic_scout(topic_id: int, run_id: int) -> None:
 
         from poneglyph.services.relevance import update_topic_relevance_scores
         update_topic_relevance_scores(topic_id)
-        _finish_run(run_id, found=len(all_new), new=synth_count)
+        if rate_limited:
+            _finish_run(
+                run_id, found=len(all_new), new=synth_count, status="error",
+                error="Semantic Scholar rate limited mid-scout — partial results saved. "
+                      "Wait a minute and run again to continue.",
+            )
+        else:
+            _finish_run(run_id, found=len(all_new), new=synth_count)
         logger.info(
-            "run_topic_scout done: topic=%d seeds=%d found=%d synth=%d errors=%d",
-            topic_id, len(paper_ids), len(all_new), synth_count, err_count,
+            "run_topic_scout done: topic=%d seeds=%d found=%d synth=%d errors=%d rate_limited=%s",
+            topic_id, len(paper_ids), len(all_new), synth_count, err_count, rate_limited,
+        )
+    except S2RateLimitError:
+        logger.warning("run_topic_scout topic=%d: S2 rate limited", topic_id)
+        _finish_run(
+            run_id, found=0, new=0, status="error",
+            error="Semantic Scholar rate limited — wait a minute and try again.",
         )
     except Exception as exc:
         logger.exception("run_topic_scout failed: %s", exc)

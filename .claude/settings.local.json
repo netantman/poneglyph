@@ -178,7 +178,11 @@
       "Bash(.venv/Scripts/python.exe -c \"from poneglyph.services.pdf_manager import get_ebook_library_dir, save_ebook_pdf; print\\('pdf_manager OK'\\)\")",
       "Bash(.venv/Scripts/python.exe -c \"from poneglyph.routes.papers import router; print\\('routes OK'\\)\")",
       "PowerShell(Get-Command py -ErrorAction SilentlyContinue)",
-      "PowerShell(Get-Command python3 -ErrorAction SilentlyContinue)"
+      "PowerShell(Get-Command python3 -ErrorAction SilentlyContinue)",
+      "Bash(python3 -c \"import poneglyph\")",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/zhong/anaconda3/envs/poneglyph/python.exe scripts/regen_skim_topic9.py)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/zhong/anaconda3/envs/poneglyph/python.exe scripts/regen_skim_topic9.py > /tmp/regen_progress.log 2>&1)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/zhong/anaconda3/envs/poneglyph/python.exe -c ' *)"
     ]
   }
 }
