@@ -26,4 +26,3 @@ data/pdfs/tmp/
 
 # Claude Code
 .claude/
-!.claude/settings.local.json
