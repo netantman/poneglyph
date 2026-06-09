@@ -225,6 +225,8 @@ async def upload_paper(
     pdf_existing_relpath: str = Form(""),
     pdf_tmp_id: str = Form(""),  # carry temp PDF across the LLM-failure re-render
     onenote_url: str = Form(""),
+    dup_choice: str = Form(""),  # "", "new", or "existing" — set by the duplicate-confirm panel
+    dup_existing_id: str = Form(""),  # target paper id when dup_choice == "existing"
 ):
     title = title.strip()
     url = url.strip()
@@ -383,7 +385,8 @@ async def upload_paper(
     # Priority 4: auto-resolve DOI via CrossRef title search for manual papers with no URL yet.
     # Guard: only apply if CrossRef returns a title similar enough to the input (ratio >= 0.6).
     # This prevents a keyword-overlapping but different paper from hijacking the upload.
-    if source == "manual" and title and not url:
+    url_autoresolved = False
+    if source == "manual" and title and not url and not dup_choice:
         doi_meta = await search_by_title(title)
         if doi_meta:
             from difflib import SequenceMatcher
@@ -391,6 +394,7 @@ async def upload_paper(
             _similarity = SequenceMatcher(None, title.lower(), returned_title.lower()).ratio()
             if _similarity >= 0.6:
                 url = doi_meta.get("url", "")
+                url_autoresolved = bool(url)
                 if not authors_list:
                     authors_list = doi_meta.get("authors") or []
                 if not abstract:
@@ -447,15 +451,65 @@ async def upload_paper(
 
     # Dedup check: by source_id (for arxiv), then by URL, then by title
     existing = None
+    match_reason = ""
     if source == "arxiv":
         existing = row_to_dict(
             fetch_one("SELECT * FROM papers WHERE source = 'arxiv' AND source_id = ?", (source_id_value,))
         )
+        if existing:
+            match_reason = "arXiv ID"
     if not existing and url:
         existing = row_to_dict(fetch_one("SELECT * FROM papers WHERE url = ?", (url,)))
+        if existing:
+            match_reason = "matching URL/DOI"
     if not existing and title:
         existing = row_to_dict(fetch_one("SELECT * FROM papers WHERE title = ?", (title,)))
+        if existing:
+            match_reason = "identical title"
 
+    # User chose "use existing" in the confirm panel: merge into that exact paper.
+    if dup_choice == "existing" and dup_existing_id.strip().isdigit():
+        existing = row_to_dict(fetch_one("SELECT * FROM papers WHERE id = ?", (int(dup_existing_id),)))
+        match_reason = "user confirmed"
+
+    # If the user chose "keep separate", force a brand-new entry. The confirm panel
+    # already blanked any auto-resolved URL, so the new record won't carry another
+    # paper's identifier (which would re-trigger this same clash on the next upload).
+    if dup_choice == "new":
+        existing = None
+
+    # Any dedup match on a fresh upload: surface a confirmation panel instead of
+    # silently merging. Titles can collide between genuinely different documents
+    # (e.g. a bank report and an academic paper, or two reports with the same name),
+    # and the title is often auto-extracted from PDF content rather than typed — so
+    # we never merge automatically; the user decides.
+    if existing and dup_choice == "":
+        return templates.TemplateResponse(
+            "papers/partials/upload_dup_confirm.html",
+            {
+                "request": request,
+                "dup": {
+                    "new_title": title,
+                    "existing_title": existing["title"],
+                    "existing_id": existing["id"],
+                    "match_reason": match_reason or "a matching identifier",
+                    "authors": ", ".join(authors_list),
+                    "abstract": abstract,
+                    "url": "" if url_autoresolved else url,
+                    "published_venue": published_venue.strip(),
+                    "published_date": published_date.strip(),
+                    "content_type": content_type,
+                    "pdf_mode": "link" if linked_pdf_path else "upload",
+                    "pdf_subfolder": pdf_subfolder.strip(),
+                    "pdf_existing_relpath": pdf_existing_relpath.strip() if linked_pdf_path else "",
+                    "pdf_tmp_id": pdf_tmp_id if pdf_tmp_path else "",
+                    "run_synthesis": run_synthesis,
+                    "topic_ids": topic_ids,
+                },
+            },
+        )
+
+    is_new_paper = not existing
     if existing:
         paper_id = existing["id"]
         msg = f"Paper '{existing['title']}' already exists"
@@ -483,21 +537,25 @@ async def upload_paper(
         if meta_source_msg:
             msg += f" — {meta_source_msg}"
 
-    # Save / link PDF
-    if pdf_content and pdf_subfolder.strip():
-        # Normal path: copy to chosen subfolder with naming convention applied
-        year = (published_date.strip()[:4]) if published_date.strip() else None
-        filename = build_pdf_filename(pdf_subfolder.strip(), title, authors_list, year)
-        dest = save_pdf(pdf_content, pdf_subfolder.strip(), filename)
-        execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), paper_id))
-    elif pdf_content and not pdf_subfolder.strip():
-        # "None, existing location" selected: keep the file in data/pdfs/ with no subfolder,
-        # no naming convention — just a sanitized title filename. Record that path.
-        filename = _sanitize_filename(title or str(uuid.uuid4())) + ".pdf"
-        dest = save_pdf(pdf_content, "", filename)
-        execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), paper_id))
-    elif linked_pdf_path:
-        execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(linked_pdf_path), paper_id))
+    # Save / link PDF — ONLY for newly created papers. When merging into an existing
+    # paper we never touch its pdf_local_path; the PDF location is edited solely on the
+    # paper detail page ("Edit path"). This prevents an upload from silently overwriting
+    # an existing paper's file location.
+    if is_new_paper:
+        if pdf_content and pdf_subfolder.strip():
+            # Normal path: copy to chosen subfolder with naming convention applied
+            year = (published_date.strip()[:4]) if published_date.strip() else None
+            filename = build_pdf_filename(pdf_subfolder.strip(), title, authors_list, year)
+            dest = save_pdf(pdf_content, pdf_subfolder.strip(), filename)
+            execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), paper_id))
+        elif pdf_content and not pdf_subfolder.strip():
+            # "None, existing location" selected: keep the file in data/pdfs/ with no subfolder,
+            # no naming convention — just a sanitized title filename. Record that path.
+            filename = _sanitize_filename(title or str(uuid.uuid4())) + ".pdf"
+            dest = save_pdf(pdf_content, "", filename)
+            execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(dest), paper_id))
+        elif linked_pdf_path:
+            execute("UPDATE papers SET pdf_local_path = ? WHERE id = ?", (str(linked_pdf_path), paper_id))
 
     # Clean up temp file (new upload or carried-over from previous attempt)
     if pdf_tmp_path and pdf_tmp_path.exists():

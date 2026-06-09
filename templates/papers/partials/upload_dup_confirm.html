@@ -1,0 +1,58 @@
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>⚠️ Possible duplicate</strong>
+            <button class="outline secondary" style="margin:0; padding: 0.2rem 0.6rem;"
+                    onclick="document.getElementById('upload-form-area').innerHTML=''">
+                Cancel
+            </button>
+        </div>
+    </header>
+
+    <p style="font-size: 0.92rem; margin-bottom: 0.5rem;">
+        You're adding <strong>"{{ dup.new_title }}"</strong>, but it matched an existing entry
+        (by {{ dup.match_reason }}):
+    </p>
+    <p style="margin: 0 0 1rem; padding: 0.6rem 0.85rem;
+              background: var(--pico-card-sectioning-background-color);
+              border: 1px solid var(--pico-card-border-color); border-radius: 0.4rem;">
+        <a href="/papers/{{ dup.existing_id }}" target="_blank"><strong>{{ dup.existing_title }}</strong></a>
+    </p>
+    <p style="font-size: 0.9rem; color: var(--pico-muted-color); margin-bottom: 1rem;">
+        Is this the same document? Bank reports and notes often share titles with academic papers
+        but are separate files.
+    </p>
+
+    <form hx-post="/papers/upload"
+          hx-encoding="multipart/form-data"
+          hx-target="#upload-form-area"
+          hx-swap="innerHTML"
+          hx-indicator="#dup-ind">
+        <!-- Carry every field through unchanged -->
+        <input type="hidden" name="title" value="{{ dup.new_title }}">
+        <input type="hidden" name="authors" value="{{ dup.authors }}">
+        <input type="hidden" name="abstract" value="{{ dup.abstract }}">
+        <input type="hidden" name="url" value="{{ dup.url }}">
+        <input type="hidden" name="published_venue" value="{{ dup.published_venue }}">
+        <input type="hidden" name="published_date" value="{{ dup.published_date }}">
+        <input type="hidden" name="content_type" value="{{ dup.content_type }}">
+        <input type="hidden" name="pdf_mode" value="{{ dup.pdf_mode }}">
+        <input type="hidden" name="pdf_subfolder" value="{{ dup.pdf_subfolder }}">
+        <input type="hidden" name="pdf_existing_relpath" value="{{ dup.pdf_existing_relpath }}">
+        <input type="hidden" name="pdf_tmp_id" value="{{ dup.pdf_tmp_id }}">
+        <input type="hidden" name="dup_existing_id" value="{{ dup.existing_id }}">
+        {% if dup.run_synthesis %}<input type="hidden" name="run_synthesis" value="1">{% endif %}
+        {% for tid in dup.topic_ids %}<input type="hidden" name="topic_ids" value="{{ tid }}">{% endfor %}
+
+        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+            <button type="submit" name="dup_choice" value="new" style="margin:0; width:auto;">
+                Keep separate (create new)
+            </button>
+            <button type="submit" name="dup_choice" value="existing" class="outline secondary"
+                    style="margin:0; width:auto;">
+                Use existing paper
+            </button>
+            <span id="dup-ind" class="htmx-indicator"><span class="spinner"></span></span>
+        </div>
+    </form>
+</article>
