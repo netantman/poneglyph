@@ -28,6 +28,29 @@ def _toast_headers(message: str, toast_type: str = "success") -> dict:
     return {"HX-Trigger": json.dumps({"showToast": {"message": message, "type": toast_type}})}
 
 
+def _title_author_search(q: str) -> tuple[str, list[str]]:
+    """Build a token-based search clause over title + authors.
+
+    Each whitespace-separated token must appear (as a substring) in either the
+    title or the authors — tokens are ANDed. This lets "Corp Bond Returns" match
+    a stored "corporate bond returns" title, which a single whole-phrase LIKE
+    would miss.
+
+    Returns (sql_clause, params). The clause is already parenthesized; callers
+    just AND it into their WHERE. Returns ("", []) for an empty query.
+    """
+    tokens = [t for t in q.lower().split() if t]
+    if not tokens:
+        return "", []
+    parts: list[str] = []
+    params: list[str] = []
+    for tok in tokens:
+        parts.append("(LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)")
+        like = f"%{tok}%"
+        params += [like, like]
+    return "(" + " AND ".join(parts) + ")", params
+
+
 def _get_paper(paper_id: int) -> dict | None:
     return row_to_dict(fetch_one("SELECT * FROM papers WHERE id = ?", (paper_id,)))
 
@@ -92,9 +115,10 @@ async def list_papers(
         if books_only_filter:
             sql += " AND p.content_type = 'book'"
         if q:
-            sql += " AND (LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)"
-            like = f"%{q.lower()}%"
-            params += [like, like]
+            clause, qparams = _title_author_search(q)
+            if clause:
+                sql += " AND " + clause
+                params += qparams
         sql += " ORDER BY p.created_at DESC"
         rows = fetch_all(sql, tuple(params))
         topic = row_to_dict(fetch_one("SELECT * FROM topics WHERE id = ?", (topic_id_int,)))
@@ -106,9 +130,10 @@ async def list_papers(
         if books_only_filter:
             conditions.append("p.content_type = 'book'")
         if q:
-            conditions.append("(LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)")
-            like = f"%{q.lower()}%"
-            params += [like, like]
+            clause, qparams = _title_author_search(q)
+            if clause:
+                conditions.append(clause)
+                params += qparams
         sql = "SELECT p.*, NULL as relevance_score FROM papers p"
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)

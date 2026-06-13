@@ -28,7 +28,7 @@
                     <select name="subfolder">
                         <option value="">— Select folder —</option>
                         {% for sf in subfolders %}
-                        <option value="{{ sf }}" {% if sf == current_subfolder %}selected{% endif %}>{{ sf }}</option>
+                        <option value="{{ sf }}" {% if sf == (current_subfolder or 'Public-Academia') %}selected{% endif %}>{{ sf }}</option>
                         {% endfor %}
                     </select>
                 </label>

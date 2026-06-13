@@ -379,17 +379,18 @@ async def topic_papers_list(request: Request, topic_id: int, q: str = ""):
         return HTMLResponse("<p>Topic not found.</p>", status_code=404)
     q = q.strip()
     if q:
-        like = f"%{q.lower()}%"
+        from poneglyph.routes.papers import _title_author_search
+        clause, qparams = _title_author_search(q)
         paper_rows = fetch_all(
-            """SELECT p.*, tp.is_scout_seed, tp.not_interesting, tp.relevance_score
+            f"""SELECT p.*, tp.is_scout_seed, tp.not_interesting, tp.relevance_score
                FROM papers p
                JOIN topic_papers tp ON p.id = tp.paper_id
                WHERE tp.topic_id = ?
-               AND (LOWER(p.title) LIKE ? OR LOWER(p.authors) LIKE ?)
+               AND {clause}
                ORDER BY p.read_next DESC, tp.not_interesting ASC,
                         COALESCE(tp.relevance_score, 1.0) DESC,
                         p.published_date DESC, p.created_at DESC""",
-            (topic_id, like, like),
+            (topic_id, *qparams),
         )
     else:
         paper_rows = fetch_all(
