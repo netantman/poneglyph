@@ -1,4 +1,4 @@
-"""Haiku bulk synthesis — run the topic's Structural Skim skill against a paper."""
+"""Sonnet bulk synthesis — run the topic's Structural Skim skill against a paper."""
 
 import base64
 import logging
@@ -156,13 +156,14 @@ _SKIM_TOOL = {
             "recommendation": {"type": "string", "enum": ["read", "skip", "deep_dive"]},
             "skip_reason": {
                 "type": "string",
-                "description": "Required when recommendation is 'skip'. One concrete sentence stating the specific problem statement, methodology flaw, or scope mismatch that disqualifies this paper.",
+                "description": "One concrete sentence stating the specific problem statement, methodology flaw, or scope mismatch that disqualifies this paper. Required when recommendation is 'skip'; use an empty string for 'read' or 'deep_dive'.",
             },
         },
         "required": [
             "main_claim", "data_source", "strategy_type", "headline_statistic",
             "signal_mechanism", "data_details", "sample", "universe",
             "portfolio_construction", "key_tables", "key_metrics", "recommendation",
+            "skip_reason",
         ],
     },
 }
@@ -171,7 +172,7 @@ _SKIM_TOOL = {
 async def synthesize_paper(
     paper: dict, topic: dict, related_notes: list[str] | None = None
 ) -> tuple[dict, str]:
-    """Run the topic's Structural Skim skill against a paper via Haiku.
+    """Run the topic's Structural Skim skill against a paper via Sonnet.
 
     Uses PDF sections (abstract, introduction, conclusion, captions) when a local PDF is
     available and readable. Falls back to abstract-only and notes this in the prompt.
@@ -270,7 +271,7 @@ async def synthesize_paper(
 
     try:
         message = await client.messages.create(
-            model=_settings.haiku_model,
+            model=_settings.sonnet_model,
             max_tokens=2048,
             tools=[_SKIM_TOOL],
             tool_choice={"type": "tool", "name": "record_skim"},
@@ -307,5 +308,8 @@ async def synthesize_paper(
             result[field] = key_tables
         else:
             result[field] = str(data.get(field) or "")
+
+    if rec == "skip" and not result.get("skip_reason"):
+        result["skip_reason"] = "(no reason recorded)"
 
     return result, ""
