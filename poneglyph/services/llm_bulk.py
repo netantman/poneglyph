@@ -270,13 +270,16 @@ async def synthesize_paper(
     user_content.append({"type": "text", "text": prompt})
 
     try:
-        message = await client.messages.create(
+        create_kwargs: dict = dict(
             model=_settings.sonnet_model,
             max_tokens=2048,
             tools=[_SKIM_TOOL],
             tool_choice={"type": "tool", "name": "record_skim"},
             messages=[{"role": "user", "content": user_content}],
         )
+        if "sonnet-5" in _settings.sonnet_model or "opus-5" in _settings.sonnet_model:
+            create_kwargs["thinking"] = {"type": "disabled"}
+        message = await client.messages.create(**create_kwargs)
         logger.info(
             "synthesize_paper: input_tokens=%d output_tokens=%d pdf=%s",
             message.usage.input_tokens,

@@ -37,11 +37,14 @@ async def call_sonnet(prompt: str, max_tokens: int = 4096, model: str | None = N
         return ""
     model_id = model or settings.sonnet_model
     try:
-        message = await client.messages.create(
+        kwargs: dict = dict(
             model=model_id,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
+        if "sonnet-5" in model_id or "opus-5" in model_id:
+            kwargs["thinking"] = {"type": "disabled"}
+        message = await client.messages.create(**kwargs)
         usage = message.usage
         logger.info(
             "call_sonnet: model=%s input_tokens=%d output_tokens=%d",
@@ -49,7 +52,8 @@ async def call_sonnet(prompt: str, max_tokens: int = 4096, model: str | None = N
             usage.input_tokens,
             usage.output_tokens,
         )
-        return message.content[0].text if message.content else ""
+        text = next((b.text for b in message.content if hasattr(b, "text")), "")
+        return text
     except Exception as exc:
         logger.warning("call_sonnet failed (model=%s): %s", model_id, exc)
         return ""
@@ -77,7 +81,8 @@ async def call_haiku(prompt: str, max_tokens: int = 512) -> tuple[str, str]:
             usage.input_tokens,
             usage.output_tokens,
         )
-        return (message.content[0].text if message.content else ""), ""
+        text = next((b.text for b in message.content if hasattr(b, "text")), "")
+        return text, ""
     except anthropic.AuthenticationError:
         msg = "API key is invalid or has been revoked — check ANTHROPIC_API_KEY in .env"
         logger.warning("call_haiku: %s", msg)
@@ -110,7 +115,7 @@ async def call_sonnet_with_pdf(
     model_id = model or settings.sonnet_model
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
     try:
-        message = await client.messages.create(
+        kwargs: dict = dict(
             model=model_id,
             max_tokens=max_tokens,
             messages=[
@@ -130,6 +135,9 @@ async def call_sonnet_with_pdf(
                 }
             ],
         )
+        if "sonnet-5" in model_id or "opus-5" in model_id:
+            kwargs["thinking"] = {"type": "disabled"}
+        message = await client.messages.create(**kwargs)
         usage = message.usage
         logger.info(
             "call_sonnet_with_pdf: model=%s input_tokens=%d output_tokens=%d",
@@ -137,7 +145,8 @@ async def call_sonnet_with_pdf(
             usage.input_tokens,
             usage.output_tokens,
         )
-        return message.content[0].text if message.content else ""
+        text = next((b.text for b in message.content if hasattr(b, "text")), "")
+        return text
     except Exception as exc:
         logger.warning("call_sonnet_with_pdf failed (model=%s): %s", model_id, exc)
         return ""
@@ -185,7 +194,8 @@ async def call_haiku_with_pdf(prompt: str, pdf_bytes: bytes, max_tokens: int = 1
             usage.input_tokens,
             usage.output_tokens,
         )
-        return (message.content[0].text if message.content else ""), ""
+        text = next((b.text for b in message.content if hasattr(b, "text")), "")
+        return text, ""
     except anthropic.AuthenticationError:
         msg = "API key is invalid or has been revoked — check ANTHROPIC_API_KEY in .env"
         logger.warning("call_haiku_with_pdf: %s", msg)
